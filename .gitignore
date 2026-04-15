@@ -1,0 +1,38 @@
+# ── Swift Package Manager ────────────────────────────────────────────────────
+.build/
+.swiftpm/
+*.resolved
+
+# ── Xcode build artifacts ────────────────────────────────────────────────────
+DerivedData/
+build/
+*.xcarchive
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# ── Xcode user-specific (machine-local, not shared) ─────────────────────────
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.pbxuser
+
+# ── macOS metadata ───────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# ── Compiled object files ────────────────────────────────────────────────────
+*.o
+*.d
+*.hmap
+*.dia
+
+# ── Editor / tooling ─────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*~

@@ -1,0 +1,328 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA000011 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000010 /* AppDelegate.swift */; };
+		AA000013 /* LoginViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000012 /* LoginViewController.swift */; };
+		AA000015 /* MainTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000014 /* MainTabBarController.swift */; };
+		AA000017 /* AfterSalesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000016 /* AfterSalesViewController.swift */; };
+		AA000019 /* BrowseViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000018 /* BrowseViewController.swift */; };
+		AA00001B /* CartViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00001A /* CartViewController.swift */; };
+		AA00001D /* CheckoutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00001C /* CheckoutViewController.swift */; };
+		AA00001F /* ContentPublishingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00001E /* ContentPublishingViewController.swift */; };
+		AA000021 /* MessagingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000020 /* MessagingViewController.swift */; };
+		AA000023 /* SeatInventoryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000022 /* SeatInventoryViewController.swift */; };
+		AA000025 /* TalentMatchingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000024 /* TalentMatchingViewController.swift */; };
+		AA000033 /* RailCommerce in Frameworks */ = {isa = PBXBuildFile; productRef = AA000031 /* RailCommerce */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AA000004 /* RailCommerceApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RailCommerceApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA000010 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		AA000012 /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
+		AA000014 /* MainTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabBarController.swift; sourceTree = "<group>"; };
+		AA000016 /* AfterSalesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AfterSalesViewController.swift; sourceTree = "<group>"; };
+		AA000018 /* BrowseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseViewController.swift; sourceTree = "<group>"; };
+		AA00001A /* CartViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartViewController.swift; sourceTree = "<group>"; };
+		AA00001C /* CheckoutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckoutViewController.swift; sourceTree = "<group>"; };
+		AA00001E /* ContentPublishingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentPublishingViewController.swift; sourceTree = "<group>"; };
+		AA000020 /* MessagingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingViewController.swift; sourceTree = "<group>"; };
+		AA000022 /* SeatInventoryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeatInventoryViewController.swift; sourceTree = "<group>"; };
+		AA000024 /* TalentMatchingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalentMatchingViewController.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000033 /* RailCommerce in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA000002 /* RailCommerceApp */ = {
+			isa = PBXGroup;
+			children = (
+				AA000040 /* Sources */,
+				AA000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA000004 /* RailCommerceApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AA000040 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				AA000041 /* RailCommerceApp */,
+			);
+			name = Sources;
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		AA000041 /* RailCommerceApp */ = {
+			isa = PBXGroup;
+			children = (
+				AA000010 /* AppDelegate.swift */,
+				AA000012 /* LoginViewController.swift */,
+				AA000014 /* MainTabBarController.swift */,
+				AA000027 /* Views */,
+			);
+			path = RailCommerceApp;
+			sourceTree = "<group>";
+		};
+		AA000027 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AA000016 /* AfterSalesViewController.swift */,
+				AA000018 /* BrowseViewController.swift */,
+				AA00001A /* CartViewController.swift */,
+				AA00001C /* CheckoutViewController.swift */,
+				AA00001E /* ContentPublishingViewController.swift */,
+				AA000020 /* MessagingViewController.swift */,
+				AA000022 /* SeatInventoryViewController.swift */,
+				AA000024 /* TalentMatchingViewController.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AA000005 /* RailCommerceApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA00000C /* Build configuration list for PBXNativeTarget "RailCommerceApp" */;
+			buildPhases = (
+				AA000006 /* Sources */,
+				AA000007 /* Frameworks */,
+				AA000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RailCommerceApp;
+			packageProductDependencies = (
+				AA000031 /* RailCommerce */,
+			);
+			productName = RailCommerceApp;
+			productReference = AA000004 /* RailCommerceApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					AA000005 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = AA00000B /* Build configuration list for PBXProject "RailCommerceApp" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA000002;
+			packageReferences = (
+				AA000030 /* XCLocalSwiftPackageReference "." */,
+			);
+			productRefGroup = AA000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA000005 /* RailCommerceApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000011 /* AppDelegate.swift in Sources */,
+				AA000013 /* LoginViewController.swift in Sources */,
+				AA000015 /* MainTabBarController.swift in Sources */,
+				AA000017 /* AfterSalesViewController.swift in Sources */,
+				AA000019 /* BrowseViewController.swift in Sources */,
+				AA00001B /* CartViewController.swift in Sources */,
+				AA00001D /* CheckoutViewController.swift in Sources */,
+				AA00001F /* ContentPublishingViewController.swift in Sources */,
+				AA000021 /* MessagingViewController.swift in Sources */,
+				AA000023 /* SeatInventoryViewController.swift in Sources */,
+				AA000025 /* TalentMatchingViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AA000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5;
+			};
+			name = Debug;
+		};
+		AA00000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		AA00000D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = RailCommerce;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.eaglepoint.railcommerce;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA00000E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = RailCommerce;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.eaglepoint.railcommerce;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA00000B /* Build configuration list for PBXProject "RailCommerceApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA000009 /* Debug */,
+				AA00000A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA00000C /* Build configuration list for PBXNativeTarget "RailCommerceApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00000D /* Debug */,
+				AA00000E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		AA000030 /* XCLocalSwiftPackageReference "." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ".";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA000031 /* RailCommerce */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000030 /* XCLocalSwiftPackageReference "." */;
+			productName = RailCommerce;
+		};
+/* End XCSwiftPackageProductDependency section */
+
+	};
+	rootObject = AA000001 /* Project object */;
+}

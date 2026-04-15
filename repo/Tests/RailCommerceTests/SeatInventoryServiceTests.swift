@@ -1,0 +1,144 @@
+import XCTest
+@testable import RailCommerce
+
+final class SeatInventoryServiceTests: XCTestCase {
+    private func makeService() -> (SeatInventoryService, FakeClock, SeatKey) {
+        let clock = FakeClock()
+        let svc = SeatInventoryService(clock: clock)
+        let seat = SeatKey(trainId: "NE1", date: "2024-01-02", segmentId: "NY-BOS",
+                           seatClass: .economy, seatNumber: "12A")
+        svc.registerSeat(seat)
+        return (svc, clock, seat)
+    }
+
+    func testReserveAndConfirm() throws {
+        let (svc, _, seat) = makeService()
+        let res = try svc.reserve(seat, holderId: "H")
+        XCTAssertEqual(res.holderId, "H")
+        XCTAssertEqual(svc.state(seat), .reserved)
+        try svc.confirm(seat, holderId: "H")
+        XCTAssertEqual(svc.state(seat), .sold)
+    }
+
+    func testReserveRejectsUnknownSeat() {
+        let (svc, _, _) = makeService()
+        let unknown = SeatKey(trainId: "?", date: "?", segmentId: "?",
+                              seatClass: .economy, seatNumber: "?")
+        XCTAssertThrowsError(try svc.reserve(unknown, holderId: "H")) { err in
+            XCTAssertEqual(err as? SeatError, .unknownSeat)
+        }
+    }
+
+    func testReserveRejectsNonAvailable() throws {
+        let (svc, _, seat) = makeService()
+        try svc.reserve(seat, holderId: "H1")
+        XCTAssertThrowsError(try svc.reserve(seat, holderId: "H2")) { err in
+            XCTAssertEqual(err as? SeatError, .notAvailable)
+        }
+    }
+
+    func testReservationExpiresAfter15Minutes() throws {
+        let (svc, clock, seat) = makeService()
+        try svc.reserve(seat, holderId: "H")
+        clock.advance(by: 16 * 60)
+        XCTAssertEqual(svc.state(seat), .available)
+        XCTAssertNil(svc.reservation(seat))
+    }
+
+    func testReleaseReturnsToAvailable() throws {
+        let (svc, _, seat) = makeService()
+        try svc.reserve(seat, holderId: "H")
+        try svc.release(seat, holderId: "H")
+        XCTAssertEqual(svc.state(seat), .available)
+    }
+
+    func testReleaseByWrongHolder() throws {
+        let (svc, _, seat) = makeService()
+        try svc.reserve(seat, holderId: "H")
+        XCTAssertThrowsError(try svc.release(seat, holderId: "OTHER")) { err in
+            XCTAssertEqual(err as? SeatError, .wrongHolder)
+        }
+    }
+
+    func testReleaseWithoutReservation() {
+        let (svc, _, seat) = makeService()
+        XCTAssertThrowsError(try svc.release(seat, holderId: "H")) { err in
+            XCTAssertEqual(err as? SeatError, .notReserved)
+        }
+    }
+
+    func testConfirmWrongHolder() throws {
+        let (svc, _, seat) = makeService()
+        try svc.reserve(seat, holderId: "H")
+        XCTAssertThrowsError(try svc.confirm(seat, holderId: "OTHER")) { err in
+            XCTAssertEqual(err as? SeatError, .wrongHolder)
+        }
+    }
+
+    func testConfirmWithoutReservation() {
+        let (svc, _, seat) = makeService()
+        XCTAssertThrowsError(try svc.confirm(seat, holderId: "H")) { err in
+            XCTAssertEqual(err as? SeatError, .notReserved)
+        }
+    }
+
+    func testAtomicRollsBackOnFailure() {
+        let (svc, _, seat) = makeService()
+        XCTAssertThrowsError(try svc.atomic {
+            _ = try svc.reserve(seat, holderId: "H")
+            throw SeatError.notAvailable
+        })
+        XCTAssertEqual(svc.state(seat), .available)
+        XCTAssertNil(svc.reservation(seat))
+    }
+
+    func testAtomicSucceeds() throws {
+        let (svc, _, seat) = makeService()
+        try svc.atomic {
+            _ = try svc.reserve(seat, holderId: "H")
+        }
+        XCTAssertEqual(svc.state(seat), .reserved)
+    }
+
+    func testSnapshotAndRollback() throws {
+        let (svc, _, seat) = makeService()
+        svc.snapshot(date: "2024-01-01")
+        try svc.reserve(seat, holderId: "H")
+        XCTAssertEqual(svc.state(seat), .reserved)
+        try svc.rollback(to: "2024-01-01")
+        XCTAssertEqual(svc.state(seat), .available)
+        XCTAssertEqual(svc.availableSnapshots(), ["2024-01-01"])
+    }
+
+    func testRollbackUnknownSnapshot() {
+        let (svc, _, _) = makeService()
+        XCTAssertThrowsError(try svc.rollback(to: "never")) { err in
+            XCTAssertEqual(err as? SeatError, .unknownSeat)
+        }
+    }
+
+    func testStateForUnknown() {
+        let (svc, _, _) = makeService()
+        let unknown = SeatKey(trainId: "?", date: "?", segmentId: "?",
+                              seatClass: .first, seatNumber: "?")
+        XCTAssertNil(svc.state(unknown))
+    }
+
+    func testSeatKeyRoundTrip() throws {
+        let k = SeatKey(trainId: "T", date: "D", segmentId: "S",
+                        seatClass: .first, seatNumber: "N")
+        let data = try JSONEncoder().encode(k)
+        XCTAssertEqual(try JSONDecoder().decode(SeatKey.self, from: data), k)
+    }
+
+    func testSeatClassAndStateRoundTrip() throws {
+        for cls in SeatClass.allCases {
+            let data = try JSONEncoder().encode(cls)
+            XCTAssertEqual(try JSONDecoder().decode(SeatClass.self, from: data), cls)
+        }
+        for state in [SeatState.available, .reserved, .sold] {
+            let data = try JSONEncoder().encode(state)
+            XCTAssertEqual(try JSONDecoder().decode(SeatState.self, from: data), state)
+        }
+    }
+}
