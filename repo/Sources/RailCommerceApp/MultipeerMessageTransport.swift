@@ -76,6 +76,15 @@ final class MultipeerMessageTransport: NSObject, MessageTransport,
     func session(_ session: MCSession, didReceive data: Data,
                  fromPeer peerID: MCPeerID) {
         guard let msg = try? JSONDecoder().decode(Message.self, from: data) else { return }
+        // Trust-boundary enforcement: the authenticated MCPeerID that actually
+        // sent this frame must match the `fromUserId` the payload claims. A
+        // malicious nearby device would otherwise be able to impersonate any
+        // user/staff id by crafting the JSON payload. Drop mismatched frames
+        // silently — they never reach `acceptInbound` in the service layer.
+        guard peerID.displayName == msg.fromUserId else {
+            NSLog("[RailCommerce] Rejecting spoofed inbound — peerID=\(peerID.displayName) claimed fromUserId=\(msg.fromUserId)")
+            return
+        }
         DispatchQueue.main.async { [weak self] in
             self?.receiveHandlers.forEach { $0(msg) }
         }

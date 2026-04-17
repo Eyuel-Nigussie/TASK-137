@@ -140,17 +140,27 @@ final class CheckoutServiceTests: XCTestCase {
             invoiceNotes: "", totalCents: 1, createdAt: Date(timeIntervalSince1970: 0))
         let fields = CheckoutService.canonicalFields(snap)
         XCTAssertEqual(fields["orderId"], "Z")
-        XCTAssertEqual(fields["lines"], "ax1@1")
-        // Full address detail in hash
+        // Line encoding now includes the notes field (empty here) so
+        // per-line note mutations are caught by the tamper hash.
+        XCTAssertEqual(fields["lines"], "ax1@1:")
+        // Full address detail in hash — includes recipient/line2/isDefault.
+        XCTAssertEqual(fields["addrRecipient"], "a")
         XCTAssertEqual(fields["addrLine1"], "1 Main")
+        XCTAssertEqual(fields["addrLine2"], "")
         XCTAssertEqual(fields["addrCity"], "NYC")
         XCTAssertEqual(fields["addrState"], "NY")
         XCTAssertEqual(fields["addrZip"], "12345")
-        // Full shipping detail in hash
+        XCTAssertEqual(fields["addrIsDefault"], "0")
+        // Full shipping detail in hash — includes etaDays.
         XCTAssertEqual(fields["shippingName"], "Standard")
         XCTAssertEqual(fields["shippingFee"], "500")
+        XCTAssertEqual(fields["shippingEta"], "3")
+        // Service date is included so refund-window mutations are detected.
+        XCTAssertEqual(fields["serviceDate"], "0")
         // Discount total in hash
         XCTAssertEqual(fields["discountTotal"], "0")
+        XCTAssertEqual(fields["rejected"], "")
+        XCTAssertEqual(fields["promoLines"], "")
     }
 
     func testOrdersForUser() throws {

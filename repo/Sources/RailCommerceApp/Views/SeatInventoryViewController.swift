@@ -53,18 +53,31 @@ final class SeatInventoryViewController: UITableViewController {
     @objc private func seedSampleSeats() {
         let trains = ["NE1", "SW2", "MW3"]
         let classes: [SeatClass] = [.economy, .business, .first]
-        for train in trains {
-            for cls in classes {
-                for num in ["1A", "1B", "2A", "2B"] {
-                    let key = SeatKey(trainId: train, date: "2024-06-15",
-                                      segmentId: "\(train)-SEG", seatClass: cls, seatNumber: num)
-                    if app.seatInventory.state(key) == nil {
-                        app.seatInventory.registerSeat(key)
+        do {
+            for train in trains {
+                for cls in classes {
+                    for num in ["1A", "1B", "2A", "2B"] {
+                        let key = SeatKey(trainId: train, date: "2024-06-15",
+                                          segmentId: "\(train)-SEG",
+                                          seatClass: cls, seatNumber: num)
+                        if app.seatInventory.state(key) == nil {
+                            // Guarded path — requires `.manageInventory`. Sales
+                            // agent and admin succeed; customers are rejected
+                            // at the trust boundary with AuthorizationError.
+                            try app.seatInventory.registerSeat(key, actingUser: user)
+                        }
                     }
                 }
             }
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } catch {
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            let alert = UIAlertController(title: "Not authorized",
+                                          message: "Only sales agents and admins can register seats.",
+                                          preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
         }
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
         reloadSeats()
     }
 

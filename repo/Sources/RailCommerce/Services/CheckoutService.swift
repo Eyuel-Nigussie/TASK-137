@@ -209,12 +209,26 @@ public final class CheckoutService {
             }
         }
 
+        // Durability-first order: persist the snapshot BEFORE any side effect
+        // (keychain hash seal, in-memory idempotency, orderStore insert). If
+        // durability fails the caller sees `.persistenceFailed` and no partial
+        // state exists — no stale keychain hash, no idempotency lockout that
+        // would reject a later retry for the same orderId.
+        try persist(snapshot)
+
         let hash = OrderHasher.hash(snapshot: Self.canonicalFields(snapshot))
-        try keychain.set(Data(hash.utf8), forKey: Self.keychainKey(for: orderId))
+        do {
+            try keychain.set(Data(hash.utf8), forKey: Self.keychainKey(for: orderId))
+        } catch {
+            // Persist succeeded but hash sealing failed. Roll back the durable
+            // write so the next retry is clean and nothing observably committed.
+            try? persistence?.delete(key: Self.persistencePrefix + orderId)
+            logger.error(.checkout, "submit keychain seal failed orderId=\(orderId) err=\(error)")
+            throw CheckoutError.persistenceFailed
+        }
         keychain.seal(Self.keychainKey(for: orderId))
         recent[orderId] = now
         orderStore[orderId] = snapshot
-        try persist(snapshot)
         _events.onNext(.orderSubmitted(orderId))
         logger.info(.checkout, "submit ok orderId=\(orderId) total=\(totalCents) seats=\(seats.count)")
         return snapshot
@@ -278,29 +292,44 @@ public final class CheckoutService {
     static func keychainKey(for orderId: String) -> String { "order.hash.\(orderId)" }
 
     /// Builds the canonical field map used for tamper-detection hashing.
-    /// Covers the full monetary and address details — not just IDs.
+    /// **Every** `OrderSnapshot` field is represented so a post-submit mutation
+    /// of any single field triggers `.tamperDetected` on verify — including
+    /// `serviceDate`, per-line promotion detail, shipping `etaDays`, address
+    /// `recipient`/`line2`/`isDefault`, and the full rejected-codes list.
     static func canonicalFields(_ s: OrderSnapshot) -> [String: String] {
         var fields: [String: String] = [
-            "orderId":      s.orderId,
-            "userId":       s.userId,
-            "total":        String(s.totalCents),
-            "createdAt":    String(Int(s.createdAt.timeIntervalSince1970)),
-            "shippingId":   s.shipping.id,
-            "shippingName": s.shipping.name,
-            "shippingFee":  String(s.shipping.feeCents),
-            "addrId":       s.address.id,
-            "addrLine1":    s.address.line1,
-            "addrCity":     s.address.city,
-            "addrState":    s.address.state.rawValue,
-            "addrZip":      s.address.zip,
-            "invoiceNotes": s.invoiceNotes,
-            "accepted":     s.promotion.acceptedCodes.joined(separator: ","),
-            "freeShipping": s.promotion.freeShipping ? "1" : "0",
+            "orderId":       s.orderId,
+            "userId":        s.userId,
+            "total":         String(s.totalCents),
+            "createdAt":     String(Int(s.createdAt.timeIntervalSince1970)),
+            "serviceDate":   String(Int(s.serviceDate.timeIntervalSince1970)),
+            "shippingId":    s.shipping.id,
+            "shippingName":  s.shipping.name,
+            "shippingFee":   String(s.shipping.feeCents),
+            "shippingEta":   String(s.shipping.etaDays),
+            "addrId":        s.address.id,
+            "addrRecipient": s.address.recipient,
+            "addrLine1":     s.address.line1,
+            "addrLine2":     s.address.line2 ?? "",
+            "addrCity":      s.address.city,
+            "addrState":     s.address.state.rawValue,
+            "addrZip":       s.address.zip,
+            "addrIsDefault": s.address.isDefault ? "1" : "0",
+            "invoiceNotes":  s.invoiceNotes,
+            "accepted":      s.promotion.acceptedCodes.joined(separator: ","),
+            "rejected":      s.promotion.rejectedCodes.joined(separator: ","),
+            "freeShipping":  s.promotion.freeShipping ? "1" : "0",
             "discountTotal": String(s.promotion.totalDiscountCents)
         ]
-        let lineDesc = s.lines.map { "\($0.sku.id)x\($0.quantity)@\($0.sku.priceCents)" }
+        let lineDesc = s.lines.map { "\($0.sku.id)x\($0.quantity)@\($0.sku.priceCents):\($0.notes)" }
             .sorted().joined(separator: ";")
         fields["lines"] = lineDesc
+        // Per-line promotion explanations — every field so a mutation anywhere
+        // in the applied-codes / original / discounted tuple is detected.
+        let promoLineDesc = s.promotion.lineExplanations
+            .map { "\($0.skuId):\($0.appliedCodes.sorted().joined(separator: "+")):\($0.originalCents)->\($0.discountedCents)" }
+            .sorted().joined(separator: ";")
+        fields["promoLines"] = promoLineDesc
         return fields
     }
 }

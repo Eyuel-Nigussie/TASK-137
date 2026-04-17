@@ -328,8 +328,11 @@ public final class AfterSalesService {
         }
     }
 
-    /// Returns all requests. Intended for CSR/admin; use `requestsVisible(to:actingUser:)` for customer views.
-    public func all() -> [AfterSalesRequest] {
+    /// Returns all requests. **Internal only** — external call sites must use
+    /// `requestsVisible(to:actingUser:)` or `requestsVisible(actingUser:)` so
+    /// object-level isolation cannot be bypassed. Tests access via
+    /// `@testable import`.
+    internal func all() -> [AfterSalesRequest] {
         requestStore.values.sorted { $0.id < $1.id }
     }
 
@@ -371,11 +374,45 @@ public final class AfterSalesService {
         (try? requestsVisible(to: actingUser.id, actingUser: actingUser)) ?? []
     }
 
-    public func get(_ id: String) -> AfterSalesRequest? { requestStore[id] }
+    /// Raw by-id read. **Internal only** — external call sites must route
+    /// through `get(_:actingUser:)` so object-level ownership is enforced.
+    internal func get(_ id: String) -> AfterSalesRequest? { requestStore[id] }
 
-    /// Returns all after-sales requests associated with `orderId`, sorted by request ID.
-    public func requests(for orderId: String) -> [AfterSalesRequest] {
+    /// Returns the request with `id` if `actingUser` is the creator OR holds
+    /// `.handleServiceTickets` / `.configureSystem`. Prevents cross-user reads
+    /// that the bare `get(_:)` API would allow.
+    public func get(_ id: String, actingUser: User) throws -> AfterSalesRequest? {
+        guard let r = requestStore[id] else { return nil }
+        if RolePolicy.can(actingUser.role, .handleServiceTickets)
+           || RolePolicy.can(actingUser.role, .configureSystem) {
+            return r
+        }
+        guard r.createdByUserId == actingUser.id else {
+            logger.warn(.afterSales, "get forbidden actor=\(actingUser.id) target=\(r.createdByUserId ?? "nil")")
+            throw AuthorizationError.forbidden(required: .handleServiceTickets)
+        }
+        return r
+    }
+
+    /// Raw per-order read. **Internal only** — external call sites must use
+    /// `requests(for:actingUser:)` so object-level ownership / CSR privilege
+    /// is checked at the trust boundary.
+    internal func requests(for orderId: String) -> [AfterSalesRequest] {
         requestStore.values.filter { $0.orderId == orderId }.sorted { $0.id < $1.id }
+    }
+
+    /// Returns all after-sales requests for `orderId`. Customers see only
+    /// their own requests; CSR / admin see all. Throws forbidden if a
+    /// non-privileged caller queries an order they do not own.
+    public func requests(for orderId: String, actingUser: User) throws -> [AfterSalesRequest] {
+        let all = requestStore.values.filter { $0.orderId == orderId }
+        if RolePolicy.can(actingUser.role, .handleServiceTickets)
+           || RolePolicy.can(actingUser.role, .configureSystem) {
+            return all.sorted { $0.id < $1.id }
+        }
+        // Non-privileged callers may only see their own requests within the order.
+        return all.filter { $0.createdByUserId == actingUser.id }
+                  .sorted { $0.id < $1.id }
     }
 
     public func sla(for id: String) -> AfterSalesSLA? {

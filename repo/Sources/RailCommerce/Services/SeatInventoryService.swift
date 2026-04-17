@@ -92,10 +92,20 @@ public final class SeatInventoryService {
         hydrate()
     }
 
-    /// Registers a seat as available. Non-throwing for admin-tool ergonomics,
-    /// but rolls back the in-memory entry if the durable write fails so the
-    /// next call retries cleanly.
-    public func registerSeat(_ key: SeatKey) {
+    /// Registers a seat as available. Requires `actingUser` to hold
+    /// `.manageInventory` (sales agents / admin) — registering baseline
+    /// inventory is an administrative operation that must not be reachable
+    /// from customer code paths.
+    public func registerSeat(_ key: SeatKey, actingUser: User) throws {
+        try RolePolicy.enforce(user: actingUser, .manageInventory)
+        registerSeat(key)
+    }
+
+    /// Unchecked variant for internal composition + test fixtures (tests access
+    /// via `@testable import`). External call sites must route through
+    /// `registerSeat(_:actingUser:)` so `.manageInventory` is always enforced
+    /// at the trust boundary.
+    internal func registerSeat(_ key: SeatKey) {
         let prior = states[key]
         states[key] = .available
         do {
@@ -237,12 +247,22 @@ public final class SeatInventoryService {
         }
     }
 
+    /// Takes a daily snapshot scoped to `actingUser`. Requires
+    /// `.manageInventory` — snapshots are audit-rollback fixtures that only
+    /// admin / sales-agent roles may create.
+    public func snapshot(date: String, actingUser: User) throws {
+        try RolePolicy.enforce(user: actingUser, .manageInventory)
+        try snapshot(date: date)
+    }
+
     /// Takes a daily snapshot keyed by the supplied date string. Persisted so it
     /// survives app restarts and can drive audit rollbacks across sessions.
     /// Throws `SeatError.persistenceFailed` on durability failure after rolling
     /// back the in-memory snapshot entry — callers must not believe a snapshot
     /// was taken that the next `rollback(to:)` cannot restore from.
-    public func snapshot(date: String) throws {
+    /// Internal: production call sites must use `snapshot(date:actingUser:)`
+    /// so `.manageInventory` authorization is enforced.
+    internal func snapshot(date: String) throws {
         let priorSnapshot = snapshots[date]
         let priorLastDate = lastSnapshotDate
         snapshots[date] = states
@@ -259,12 +279,22 @@ public final class SeatInventoryService {
 
     public func availableSnapshots() -> [String] { snapshots.keys.sorted() }
 
+    /// Audit-rollback scoped to `actingUser`. Requires `.manageInventory`
+    /// — rollback discards live reservations, so only admin / sales-agent
+    /// roles may invoke it.
+    public func rollback(to date: String, actingUser: User) throws {
+        try RolePolicy.enforce(user: actingUser, .manageInventory)
+        try rollback(to: date)
+    }
+
     /// Restores seat state from the snapshot for `date`, enabling audit rollbacks.
     /// The restored state is persisted via `persistStates()` so the rollback
     /// survives restart. On durability failure the in-memory state is restored
     /// to its pre-rollback values and the error is propagated — callers must
     /// not believe an audit rollback succeeded that was never durably recorded.
-    public func rollback(to date: String) throws {
+    /// Internal: production call sites must use `rollback(to:actingUser:)`
+    /// so `.manageInventory` authorization is enforced.
+    internal func rollback(to date: String) throws {
         guard let snap = snapshots[date] else { throw SeatError.unknownSeat }
         let prevStates = states
         let prevReservations = reservations

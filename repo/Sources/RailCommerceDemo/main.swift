@@ -143,8 +143,9 @@ do {
 section("Seat inventory (atomic + 15-min locks + snapshots)")
 let seat = SeatKey(trainId: "NE1", date: "2024-01-02", segmentId: "NY-BOS",
                    seatClass: .economy, seatNumber: "12A")
-app.seatInventory.registerSeat(seat)
-try app.seatInventory.snapshot(date: "2024-01-02")
+let salesAgentUser = User(id: "agent1", displayName: "Sam Agent", role: .salesAgent)
+try app.seatInventory.registerSeat(seat, actingUser: salesAgentUser)
+try app.seatInventory.snapshot(date: "2024-01-02", actingUser: salesAgentUser)
 let res = try app.seatInventory.reserve(seat, holderId: "C1", actingUser: customerUser)
 ok("Reserved seat 12A until \(res.expiresAt) (holder C1)")
 kv("state", app.seatInventory.state(seat)!.rawValue)
@@ -168,7 +169,7 @@ kv("breach?", "response=\(sla.firstResponseBreached) resolution=\(sla.resolution
 clock.advance(by: 48 * 3600)
 let changed = app.afterSales.runAutomation()
 ok("Automation pass — changed: \(changed)")
-kv("R-1 status", app.afterSales.get("R-1")!.status.rawValue)
+kv("R-1 status", try app.afterSales.get("R-1", actingUser: csrUser)!.status.rawValue)
 
 // MARK: Messaging
 section("Offline staff messaging (queued, masked, filtered)")

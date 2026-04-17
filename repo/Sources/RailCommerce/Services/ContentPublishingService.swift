@@ -73,6 +73,9 @@ public enum ContentError: Error, Equatable {
     case noPriorVersion
     case cannotApproveOwnDraft
     case persistenceFailed
+    /// `editorId` did not match `actingUser.id` — callers cannot forge the
+    /// edit-provenance audit trail even when they hold `.draftContent`.
+    case editorIdSpoof
 }
 
 /// Battery-optimized heavy processing hook: tasks are accepted but deferred unless
@@ -152,27 +155,39 @@ public final class ContentPublishingService {
     }
 
     /// Creates a new content draft. The caller must hold `.draftContent`.
+    /// Provenance binding: `editorId` must equal `actingUser.id` — we record
+    /// the authenticated caller's id as the editor so the audit trail cannot
+    /// be forged (was previously a caller-supplied free-form string).
     @discardableResult
     public func createDraft(id: String, kind: ContentKind, title: String, tag: TaxonomyTag,
                             body: String, mediaRefs: [MediaReference] = [],
                             editorId: String, actingUser: User) throws -> ContentItem {
         try RolePolicy.enforce(user: actingUser, .draftContent)
+        guard editorId == actingUser.id else {
+            logger.warn(.content, "createDraft editorId spoof actor=\(actingUser.id) claimed=\(editorId)")
+            throw ContentError.editorIdSpoof
+        }
         var item = ContentItem(id: id, kind: kind, title: title, tag: tag)
         let version = ContentVersion(number: 1, body: body, mediaRefs: mediaRefs,
-                                     editedBy: editorId, editedAt: clock.now())
+                                     editedBy: actingUser.id, editedAt: clock.now())
         item.versions = [version]
         item.currentVersion = 1
         items[id] = item
         try persist(item)
-        logger.info(.content, "createDraft id=\(id) editor=\(editorId)")
+        logger.info(.content, "createDraft id=\(id) editor=\(actingUser.id)")
         return item
     }
 
     /// Edits an existing draft or rejected item. The caller must hold `.draftContent`.
+    /// Provenance binding: `editorId` must equal `actingUser.id`.
     @discardableResult
     public func edit(id: String, body: String, mediaRefs: [MediaReference] = [],
                      editorId: String, actingUser: User) throws -> ContentItem {
         try RolePolicy.enforce(user: actingUser, .draftContent)
+        guard editorId == actingUser.id else {
+            logger.warn(.content, "edit editorId spoof actor=\(actingUser.id) claimed=\(editorId)")
+            throw ContentError.editorIdSpoof
+        }
         guard var item = items[id] else { throw ContentError.notFound }
         guard item.status == .draft || item.status == .rejected else {
             throw ContentError.invalidState
@@ -180,7 +195,7 @@ public final class ContentPublishingService {
         let nextNumber = item.versions.map { $0.number }.max()! + 1
         var versions = item.versions
         versions.append(ContentVersion(number: nextNumber, body: body, mediaRefs: mediaRefs,
-                                       editedBy: editorId, editedAt: clock.now()))
+                                       editedBy: actingUser.id, editedAt: clock.now()))
         if versions.count > Self.maxVersions {
             versions.removeFirst(versions.count - Self.maxVersions)
         }
