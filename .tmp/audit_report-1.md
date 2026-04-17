@@ -1,305 +1,240 @@
-# Delivery Acceptance and Project Architecture Audit (Static-Only)
+1. Verdict
+- Overall conclusion: **Fail**
+- Basis: Core prompt-fit gaps remain in delivered user flows, especially (a) Sales Agent cannot execute ticket/merchandise sales UI flow, (b) seat-reservation/oversell control is not wired into checkout UI flow, and (c) chat attachment capability is not exposed in UI despite being a stated feature.
 
-## 1. Verdict
-- Overall conclusion: **Partial Pass**
-
-## 2. Scope and Static Verification Boundary
+2. Scope and Static Verification Boundary
 - What was reviewed:
-  - Repository docs and configuration: `repo/README.md`, `repo/Package.swift`, `docs/design.md`, `docs/apispec.md`, `repo/Sources/RailCommerceApp/Info.plist`
-  - Core/domain implementation: `repo/Sources/RailCommerce/**`
-  - iOS app wiring/UI implementation: `repo/Sources/RailCommerceApp/**`
-  - Static test suite and test contracts: `repo/Tests/RailCommerceTests/**`, `repo/run_tests.sh`, `repo/Dockerfile`
+  - Project docs and run/test/config manifests (`repo/README.md:1`, `repo/Package.swift:1`, `repo/start.sh:1`, `repo/run_tests.sh:1`, `repo/run_ios_tests.sh:1`, `repo/Sources/RailCommerceApp/Info.plist:1`).
+  - Entry points and app composition (`repo/Sources/RailCommerceApp/AppDelegate.swift:12`, `repo/Sources/RailCommerce/RailCommerce.swift:5`).
+  - Auth/authz/isolation/security-critical services (`repo/Sources/RailCommerce/Core/CredentialStore.swift:15`, `repo/Sources/RailCommerce/Services/CheckoutService.swift:81`, `repo/Sources/RailCommerce/Services/AfterSalesService.swift:98`, `repo/Sources/RailCommerce/Services/MessagingService.swift:111`, `repo/Sources/RailCommerce/Services/SeatInventoryService.swift:60`).
+  - UIKit role shells and feature VCs (`repo/Sources/RailCommerceApp/MainTabBarController.swift:6`, `repo/Sources/RailCommerceApp/MainSplitViewController.swift:9`, `repo/Sources/RailCommerceApp/Views/*.swift`).
+  - Unit/integration/app-layer tests statically (`repo/Tests/RailCommerceTests/*.swift`, `repo/Tests/RailCommerceAppTests/*.swift`).
 - What was not reviewed:
-  - Runtime behavior on simulator/device
-  - Real BGTaskScheduler execution timing, Multipeer device-to-device behavior, iPad rotation/split transitions at runtime
+  - Runtime behavior on simulator/device, performance instrumentation outputs, and actual OS permission dialogs.
 - What was intentionally not executed:
-  - App launch, tests, Docker, networked/dependency operations
+  - App launch, `swift test`, `xcodebuild test`, Docker, any external service.
 - Claims requiring manual verification:
-  - Cold start under 1.5s on iPhone 11-class hardware
-  - Runtime UX polish across all screen sizes/orientations/assistive settings
-  - Real camera permission/runtime behavior and background-task scheduling cadence
+  - Cold start <1.5s and memory responsiveness under real device pressure.
+  - iPad portrait/landscape behavior and Split View runtime UX quality.
+  - Background task scheduling/execution timing by iOS power policies.
+  - Local network peer discovery behavior across devices.
 
-## 3. Repository / Requirement Mapping Summary
-- Prompt core goal (static mapping): offline iOS operations app covering catalog browsing/taxonomy, cart/promo/checkout integrity, after-sales workflows and SLA automation, secure local messaging, content governance workflow, seat inventory integrity, membership marketing, and talent matching.
+3. Repository / Requirement Mapping Summary
+- Prompt core goal mapped: offline iOS RailCommerce operations app across sales, content workflow, after-sales, staff messaging, membership, and talent matching.
 - Main implementation areas mapped:
-  - Domain services in `repo/Sources/RailCommerce/Services/*`
-  - Security/authn/authz in `repo/Sources/RailCommerce/Core/*` + `Models/Roles.swift`
-  - iOS shell/navigation/feature VCs in `repo/Sources/RailCommerceApp/*`
-  - Test coverage in `repo/Tests/RailCommerceTests/*`
+  - Domain services in `Sources/RailCommerce/Services` for promotions, checkout/idempotency/hash, after-sales/SLA/automation, messaging moderation/queue, seat inventory atomicity, content workflow/versioning, attachments cleanup, and talent ranking.
+  - UIKit app shell + role tabs/split view in `Sources/RailCommerceApp`.
+  - Static test suites for service logic and iOS VC loading in `Tests/`.
 
-## 4. Section-by-section Review
+4. Section-by-section Review
 
 ### 1. Hard Gates
-
 #### 1.1 Documentation and static verifiability
-- Conclusion: **Partial Pass**
-- Rationale:
-  - Startup/run/test docs are present and detailed (`repo/README.md:56-166`, `repo/run_tests.sh:1-65`).
-  - Entry points and structure are statically consistent (`repo/Package.swift:4-50`, `repo/Sources/RailCommerceApp/AppDelegate.swift:11-90`).
-  - Material doc drift exists for background task type (`docs/apispec.md:77-80` states `BGAppRefreshTask` for publish; code registers `BGProcessingTask` in `AppDelegate.swift:185-206`).
-- Evidence: `repo/README.md:56`, `repo/Package.swift:4`, `repo/Sources/RailCommerceApp/AppDelegate.swift:185`, `docs/apispec.md:77`
+- Conclusion: **Pass**
+- Rationale: README provides explicit run/test prerequisites, scripts, expected outputs, and project structure; scripts are statically consistent with docs.
+- Evidence: `repo/README.md:20`, `repo/README.md:72`, `repo/README.md:119`, `repo/start.sh:39`, `repo/run_tests.sh:38`, `repo/run_ios_tests.sh:67`.
 
 #### 1.2 Material deviation from Prompt
-- Conclusion: **Partial Pass**
-- Rationale:
-  - Core business modules exist and align strongly (cart/promo/checkout/after-sales/content/messaging/talent/membership/inventory).
-  - However, a blocker configuration defect undermines required camera-permission flow, and a high-risk messaging inbound path bypasses core safety controls.
-- Evidence: `repo/Sources/RailCommerce/Services/*.swift`, `repo/Sources/RailCommerceApp/Info.plist:4-21`, `repo/Sources/RailCommerce/Services/MessagingService.swift:221-240,365-372`
+- Conclusion: **Fail**
+- Rationale: Core role/flow mismatches exist: Sales Agent cannot perform sales flow in UI; checkout flow does not wire seat reservation; chat attachments are not exposed in UI.
+- Evidence: `repo/Sources/RailCommerce/Models/Roles.swift:33`, `repo/Sources/RailCommerceApp/MainTabBarController.swift:37`, `repo/Sources/RailCommerceApp/Views/BrowseViewController.swift:170`, `repo/Sources/RailCommerceApp/Views/CheckoutViewController.swift:329`, `repo/Sources/RailCommerce/Services/CheckoutService.swift:126`, `repo/Sources/RailCommerceApp/Views/MessagingViewController.swift:129`, `repo/Sources/RailCommerce/Services/MessagingService.swift:207`.
 
 ### 2. Delivery Completeness
-
-#### 2.1 Coverage of explicitly stated core requirements
+#### 2.1 Core requirements coverage
 - Conclusion: **Partial Pass**
-- Rationale:
-  - Most explicit core requirements are implemented in code (RBAC roles, promotion constraints, idempotent checkout, SLA automation, content lifecycle, inventory lifecycle, local messaging controls, offline talent ranking).
-  - Gaps/risks:
-    - Camera permission contract is not fully configured in Info.plist (missing `NSCameraUsageDescription`).
-    - Closed-loop after-sales messaging exists at service level, but app-level after-sales UI does not expose case-thread messaging actions.
-- Evidence: `repo/Sources/RailCommerce/Services/CheckoutService.swift:108-209`, `.../PromotionEngine.swift:47-180`, `.../AfterSalesService.swift:145-193,393-430`, `.../ContentPublishingService.swift:154-309`, `.../MessagingService.swift:201-314`, `repo/Sources/RailCommerceApp/Views/AfterSalesViewController.swift:89-153,234-254`, `repo/Sources/RailCommerceApp/Info.plist:4-21`
-- Manual verification note:
-  - Camera flow runtime behavior is **Manual Verification Required** due missing key and no execution in this audit.
+- Rationale: Many core modules are implemented (promotion rules, idempotent checkout/hash, after-sales SLA/automation, content lifecycle, offline talent matching), but key prompt-critical end-user flows remain incomplete.
+- Evidence: `repo/Sources/RailCommerce/Services/PromotionEngine.swift:48`, `repo/Sources/RailCommerce/Services/CheckoutService.swift:82`, `repo/Sources/RailCommerce/Services/AfterSalesService.swift:99`, `repo/Sources/RailCommerce/Services/ContentPublishingService.swift:111`, `repo/Sources/RailCommerce/Services/TalentMatchingService.swift:80`, with gaps at `repo/Sources/RailCommerceApp/MainTabBarController.swift:37`, `repo/Sources/RailCommerceApp/Views/CheckoutViewController.swift:329`, `repo/Sources/RailCommerceApp/Views/MessagingViewController.swift:129`.
 
-#### 2.2 End-to-end deliverable vs partial/demo
-- Conclusion: **Pass**
-- Rationale:
-  - Repo has coherent project structure, iOS app layer, domain layer, and extensive tests; not a single-file demo.
-- Evidence: `repo/README.md:21-53`, `repo/Sources/RailCommerceApp/*`, `repo/Sources/RailCommerce/*`, `repo/Tests/RailCommerceTests/*`
+#### 2.2 End-to-end 0→1 deliverable vs partial/demo
+- Conclusion: **Partial Pass**
+- Rationale: Repo has full structure, app target, and extensive tests/docs; however several required flows are only partially realized in UI integration.
+- Evidence: `repo/README.md:38`, `repo/Package.swift:4`, `repo/RailCommerceApp.xcodeproj/project.pbxproj:1`, `repo/Tests/RailCommerceTests/IntegrationTests.swift:6`, plus flow gaps above.
 
 ### 3. Engineering and Architecture Quality
-
-#### 3.1 Structure and module decomposition
+#### 3.1 Structure/module decomposition
 - Conclusion: **Pass**
-- Rationale:
-  - Clear separation between domain services and platform wiring; protocol-based composition for portability/testability.
-- Evidence: `repo/Sources/RailCommerce/RailCommerce.swift:28-88`, `repo/Package.swift:18-49`, `repo/Sources/RailCommerce/Core/*.swift`
+- Rationale: Services, models, app shell, and tests are cleanly decomposed; responsibilities are generally clear.
+- Evidence: `repo/Sources/RailCommerce/RailCommerce.swift:13`, `repo/Sources/RailCommerce/Services/*.swift`, `repo/Sources/RailCommerceApp/Views/*.swift`, `repo/Tests/RailCommerceTests/*.swift`.
 
 #### 3.2 Maintainability/extensibility
 - Conclusion: **Partial Pass**
-- Rationale:
-  - Good dependency injection and persistence abstractions.
-  - Notable maintainability/security risk: inbound transport messages bypass outbound validation pipeline and shared guardrails.
-- Evidence: `repo/Sources/RailCommerce/Services/MessagingService.swift:221-245,365-372`, `repo/Sources/RailCommerce/Core/MessageTransport.swift:10-33`
+- Rationale: Good abstractions exist (protocol-based keychain/persistence/transport/auth), but some prompt-critical behaviors are optional or not wired through the production UI flow, reducing effective maintainability of requirement fit.
+- Evidence: `repo/Sources/RailCommerce/Core/MessageTransport.swift:10`, `repo/Sources/RailCommerce/Core/PersistenceStore.swift:7`, `repo/Sources/RailCommerce/Services/CheckoutService.swift:126`, `repo/Sources/RailCommerceApp/Views/CheckoutViewController.swift:329`.
 
 ### 4. Engineering Details and Professionalism
-
-#### 4.1 Error handling, logging, validation, API design
+#### 4.1 Error handling/logging/validation
 - Conclusion: **Partial Pass**
-- Rationale:
-  - Strong validation and typed errors across core services; structured logger and redactor exist.
-  - Security/professionalism concerns remain:
-    - Missing required camera usage string in Info.plist.
-    - System keychain implementation does not set documented accessibility class (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`).
-- Evidence: `repo/Sources/RailCommerce/Core/Logger.swift:84-104`, `repo/Sources/RailCommerceApp/SystemKeychain.swift:103-108`, `docs/apispec.md:31`, `repo/Sources/RailCommerceApp/Info.plist:4-21`
+- Rationale: Strong validation and logging categories/redaction are present, but some error semantics are misleading (e.g., seat dependency missing mapped to `.noShipping`) and some UI error handling is generic.
+- Evidence: `repo/Sources/RailCommerce/Core/Logger.swift:4`, `repo/Sources/RailCommerce/Core/Logger.swift:86`, `repo/Sources/RailCommerce/Services/CheckoutService.swift:173`, `repo/Sources/RailCommerce/Services/CheckoutService.swift:175`, `repo/Sources/RailCommerceApp/Views/AfterSalesViewController.swift:227`.
 
-#### 4.2 Product-like organization vs demo-level
-- Conclusion: **Pass**
-- Rationale:
-  - Multi-module implementation with many bounded services, app shells, and dedicated tests resembles product-oriented architecture.
-- Evidence: `repo/Sources/RailCommerce/*`, `repo/Sources/RailCommerceApp/*`, `repo/Tests/RailCommerceTests/*`
+#### 4.2 Product-like organization vs demo-only
+- Conclusion: **Partial Pass**
+- Rationale: Codebase shape is product-like with many services/tests, but some critical role-feature UX pathways are still missing/incomplete for stated business scope.
+- Evidence: `repo/Sources/RailCommerce/RailCommerce.swift:5`, `repo/Tests/RailCommerceTests/IntegrationTests.swift:6`, gaps at `repo/Sources/RailCommerceApp/MainTabBarController.swift:37`.
 
 ### 5. Prompt Understanding and Requirement Fit
+#### 5.1 Business goal/constraints fit
+- Conclusion: **Fail**
+- Rationale: Major semantics mismatch on role capabilities and checkout-seat coupling weakens prompt fit despite strong domain scaffolding.
+- Evidence: `repo/Sources/RailCommerce/Models/Roles.swift:33`, `repo/Sources/RailCommerceApp/MainTabBarController.swift:46`, `repo/Sources/RailCommerceApp/Views/BrowseViewController.swift:170`, `repo/Sources/RailCommerceApp/Views/CheckoutViewController.swift:329`, `repo/Sources/RailCommerce/Services/CheckoutService.swift:167`.
 
-#### 5.1 Business goal, scenario, constraints fit
-- Conclusion: **Partial Pass**
-- Rationale:
-  - Implementation strongly reflects prompt semantics (offline-first, role-aware workflows, deterministic promo, idempotent checkout, content governance).
-  - Material misses/risks against prompt constraints:
-    - Camera permission prompt requirement is not fully satisfied statically (missing plist key).
-    - Heavy-work gating “on power OR after user inactivity” relies on inactivity tracking that is not wired to real user interaction events.
-- Evidence: `repo/Sources/RailCommerceApp/Info.plist:4-21`, `repo/Sources/RailCommerceApp/SystemProviders.swift:23-39,62-70`, `repo/Sources/RailCommerceApp/AppDelegate.swift:115-129`
-- Manual verification note:
-  - User-inactivity gating correctness is **Manual Verification Required** at runtime; static evidence suggests risk.
-
-### 6. Aesthetics (frontend-only)
-
-#### 6.1 Visual and interaction quality fit
+### 6. Aesthetics (frontend-only/full-stack)
+#### 6.1 Visual/interaction quality
 - Conclusion: **Cannot Confirm Statistically**
-- Rationale:
-  - Static code shows semantic colors, Dynamic Type usage in many controls, empty states, and haptics in many actions.
-  - Full visual quality/consistency across all screens, orientations, and Split View transitions cannot be proven without runtime UI inspection.
-- Evidence: `repo/Sources/RailCommerceApp/LoginViewController.swift:46-121`, `repo/Sources/RailCommerceApp/Views/*.swift`, `repo/Sources/RailCommerceApp/MainSplitViewController.swift:24-55`
-- Manual verification note:
-  - **Manual Verification Required** on iPhone/iPad simulator/device.
+- Rationale: Static code shows semantic colors, dynamic fonts, safe-area/auto-layout, and empty/error messaging, but visual quality, spacing consistency, and interaction polish require runtime rendering review.
+- Evidence: `repo/Sources/RailCommerceApp/Views/LoginViewController.swift:42`, `repo/Sources/RailCommerceApp/Views/CartViewController.swift:77`, `repo/Sources/RailCommerceApp/MainSplitViewController.swift:5`.
+- Manual verification required: iPhone/iPad portrait/landscape visual behavior and interaction coherence.
 
-## 5. Issues / Suggestions (Severity-Rated)
+5. Issues / Suggestions (Severity-Rated)
 
-### Blocker
-
-1. **Missing `NSCameraUsageDescription` breaks required photo-proof permission flow**
-- Severity: **Blocker**
+### Blocker / High
+1) Severity: **High**
+- Title: Sales Agent cannot perform offline sales flow in UI
 - Conclusion: **Fail**
-- Evidence: `repo/Sources/RailCommerceApp/Info.plist:4-21` (no `NSCameraUsageDescription`), camera access path at `repo/Sources/RailCommerceApp/Views/AfterSalesViewController.swift:155-170`
-- Impact:
-  - Prompt explicitly requires camera-based photo proof with explicit permission prompts.
-  - iOS camera access APIs require camera usage description key; without it, permission flow cannot be safely/compliantly delivered.
-- Minimum actionable fix:
-  - Add `NSCameraUsageDescription` in `Info.plist` with user-facing rationale aligned to after-sales proof capture.
+- Evidence: `repo/Sources/RailCommerce/Models/Roles.swift:33`, `repo/Sources/RailCommerceApp/MainTabBarController.swift:37`, `repo/Sources/RailCommerceApp/Views/BrowseViewController.swift:170`
+- Impact: Prompt explicitly includes Sales Agent for ticket/merchandise sales, but agent role is blocked from add-to-cart/checkout user path.
+- Minimum actionable fix: Expose sales transaction flow for `.processTransaction` users (browse add-to-cart + checkout path with proper on-behalf identity controls).
 
-### High
-
-2. **Inbound P2P messages bypass sensitive-data blocking, masking, block controls, and attachment checks**
-- Severity: **High**
+2) Severity: **High**
+- Title: Seat reservation/oversell protection is not integrated into checkout UI path
 - Conclusion: **Fail**
-- Evidence:
-  - Outbound checks exist in enqueue pipeline: `repo/Sources/RailCommerce/Services/MessagingService.swift:218-240`
-  - Inbound transport path directly appends message without same checks: `repo/Sources/RailCommerce/Services/MessagingService.swift:365-372`
-  - Multipeer transport receives raw payload and forwards it: `repo/Sources/RailCommerceApp/MultipeerMessageTransport.swift:76-81`
-- Impact:
-  - Remote peer payloads can bypass core safety controls required by prompt.
-  - Blocked senders and sensitive content protections can be circumvented for inbound traffic.
-- Minimum actionable fix:
-  - Route inbound messages through the same validation/sanitization policy path as outbound (or a shared validator with equivalent guarantees), enforcing block rules, sensitive regex rejection, and attachment constraints before persistence/display.
+- Evidence: `repo/Sources/RailCommerce/Services/CheckoutService.swift:126`, `repo/Sources/RailCommerce/Services/CheckoutService.swift:167`, `repo/Sources/RailCommerceApp/Views/CheckoutViewController.swift:329`, `repo/Sources/RailCommerceApp/Views/SeatInventoryViewController.swift:105`
+- Impact: Prompt requires 15-minute reservation during checkout to prevent oversell; current UI checkout submits without seat transaction input.
+- Minimum actionable fix: Add seat selection in checkout and pass `seats` + `seatInventory` to `CheckoutService.submit`, with user-visible conflict handling.
 
-3. **Heavy-work gating likely misclassifies active usage as inactivity**
-- Severity: **High**
-- Conclusion: **Partial Fail**
-- Evidence:
-  - `SystemBattery` inactivity is updated only on coarse notifications: `repo/Sources/RailCommerceApp/SystemProviders.swift:31-39`
-  - Comment acknowledges intended global touch hook, but no such wiring appears: `repo/Sources/RailCommerceApp/SystemProviders.swift:64`, `recordActivity` refs only in same file.
-  - Foreground ticker repeatedly triggers scheduled processing: `repo/Sources/RailCommerceApp/AppDelegate.swift:115-129`
-- Impact:
-  - Prompt requires heavy work only on power or after user inactivity; inaccurate inactivity signal can violate this constraint.
-- Minimum actionable fix:
-  - Wire real interaction tracking (e.g., app-wide touch events / scene activity callbacks) to `recordActivity()`, and add tests for active-user suppression behavior.
+3) Severity: **High**
+- Title: Messaging attachments feature required by prompt is not exposed in app UI
+- Conclusion: **Fail**
+- Evidence: `repo/Sources/RailCommerce/Services/MessagingService.swift:207`, `repo/Sources/RailCommerce/Services/MessagingService.swift:234`, `repo/Sources/RailCommerceApp/Views/MessagingViewController.swift:129`, `repo/Sources/RailCommerceApp/Views/AfterSalesCaseThreadViewController.swift:141`
+- Impact: Attachment policy exists but users cannot attach JPEG/PNG/PDF in chat UI, so core feature is incomplete.
+- Minimum actionable fix: Add attachment picker/upload in messaging UIs and bind selected attachments into `enqueue(...attachments:)`.
 
 ### Medium
-
-4. **After-sales closed-loop messaging is service-complete but not exposed as an end-user flow in AfterSales UI**
-- Severity: **Medium**
+4) Severity: **Medium**
+- Title: Checkout error classification is misleading for seat-inventory wiring failures
 - Conclusion: **Partial Pass**
-- Evidence:
-  - Case-thread APIs exist: `repo/Sources/RailCommerce/Services/AfterSalesService.swift:147-193`
-  - After-sales VC supports listing/opening/approving but no case-thread send/read controls: `repo/Sources/RailCommerceApp/Views/AfterSalesViewController.swift:70-85,89-153,234-254`
-- Impact:
-  - End-to-end user journey for required closed-loop after-sales messaging is incomplete at UI level.
-- Minimum actionable fix:
-  - Add request-detail/thread UI in AfterSales flow and bind to `postCaseMessage` / `caseMessages`.
+- Evidence: `repo/Sources/RailCommerce/Services/CheckoutService.swift:173`, `repo/Sources/RailCommerce/Services/CheckoutService.swift:175`
+- Impact: Missing seat inventory dependency throws `.noShipping`, reducing diagnosability and producing incorrect UX/error telemetry.
+- Minimum actionable fix: Introduce a dedicated checkout error case (e.g., `.seatInventoryUnavailable`) and map it in UI messaging.
 
-5. **Background task documentation drifts from implementation**
-- Severity: **Medium**
-- Conclusion: **Fail (docs consistency)**
-- Evidence:
-  - Docs claim publish runs as `BGAppRefreshTask`: `docs/apispec.md:77-79`
-  - Code registers publish as `BGProcessingTask`: `repo/Sources/RailCommerceApp/AppDelegate.swift:185-206`
-- Impact:
-  - Reviewer/operator understanding of runtime scheduling constraints becomes inaccurate.
-- Minimum actionable fix:
-  - Update `docs/apispec.md` to reflect `BGProcessingTask` for publish (or align code/docs intentionally).
+5) Severity: **Medium**
+- Title: Content authoring UI does not expose onboard-offer type and taxonomy configuration
+- Conclusion: **Partial Pass**
+- Evidence: `repo/Sources/RailCommerceApp/Views/ContentPublishingViewController.swift:167`, `repo/Sources/RailCommerceApp/Views/ContentPublishingViewController.swift:171`, `repo/Sources/RailCommerce/Services/ContentPublishingService.swift:156`
+- Impact: Prompt requires advisory/offer publishing organized by configurable taxonomy; service supports it, UI creation path is fixed/defaulted.
+- Minimum actionable fix: Add content-kind and taxonomy selectors in draft creation/edit UI.
 
-6. **System keychain implementation does not enforce documented accessibility class**
-- Severity: **Medium**
-- Conclusion: **Partial Fail**
-- Evidence:
-  - Docs specify `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`: `docs/apispec.md:31`
-  - Keychain query/add attributes omit `kSecAttrAccessible`: `repo/Sources/RailCommerceApp/SystemKeychain.swift:103-108,27-33`
-- Impact:
-  - Secret-storage hardening is weaker/unclear versus documented security posture.
-- Minimum actionable fix:
-  - Set explicit `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` on add/update where appropriate and update docs/tests accordingly.
+### Low
+6) Severity: **Low**
+- Title: Hardcoded DEBUG credentials increase accidental misuse risk
+- Conclusion: **Partial Pass**
+- Evidence: `repo/Sources/RailCommerceApp/AppDelegate.swift:41`, `repo/Sources/RailCommerceApp/AppDelegate.swift:180`, `repo/README.md:174`
+- Impact: Debug-only seeds are intentional, but can leak into screenshots/test docs or misconfigured builds.
+- Minimum actionable fix: Keep `#if DEBUG`, add explicit build-time assertion preventing seed path in Release CI, and document fixture handling policy.
 
-## 6. Security Review Summary
+6. Security Review Summary
 
-- authentication entry points: **Pass**
-  - Local credential verification with password policy and biometric provider abstraction exists.
-  - Evidence: `repo/Sources/RailCommerce/Core/CredentialStore.swift:94-118`, `repo/Sources/RailCommerceApp/LoginViewController.swift:164-177`.
+- authentication entry points
+  - Conclusion: **Pass**
+  - Evidence: Password + biometric flow with credential verification and account binding: `repo/Sources/RailCommerceApp/LoginViewController.swift:150`, `repo/Sources/RailCommerce/Core/CredentialStore.swift:15`, `repo/Sources/RailCommerce/Core/BiometricBoundAccount.swift:44`.
 
-- route-level authorization: **Not Applicable**
-  - No HTTP/API routes exist (offline app architecture).
-  - Evidence: `docs/apispec.md:5-13`.
+- route-level authorization
+  - Conclusion: **Not Applicable**
+  - Evidence: No HTTP/API route layer exists; app is local UIKit/service architecture (`repo/Sources/RailCommerceApp/AppDelegate.swift:12`).
 
-- object-level authorization: **Partial Pass**
-  - Strong object-level checks in after-sales and messaging visibility paths.
-  - Evidence: `repo/Sources/RailCommerce/Services/AfterSalesService.swift:350-372`, `repo/Sources/RailCommerce/Services/MessagingService.swift:192-199,256-273`.
-  - Residual risk: inbound transport bypass path weakens policy enforcement for received messages (`MessagingService.swift:365-372`).
+- object-level authorization
+  - Conclusion: **Pass**
+  - Evidence: Order ownership isolation, after-sales visibility controls, message visibility/thread constraints: `repo/Sources/RailCommerce/Services/CheckoutService.swift:255`, `repo/Sources/RailCommerce/Services/AfterSalesService.swift:350`, `repo/Sources/RailCommerce/Services/MessagingService.swift:192`, `repo/Sources/RailCommerce/Services/MessagingService.swift:256`.
 
-- function-level authorization: **Pass**
-  - Mutators generally enforce permissions at function entry.
-  - Evidence: `repo/Sources/RailCommerce/Services/CheckoutService.swift:129-139`, `.../AfterSalesService.swift:200,225,239,253,274,293`, `.../ContentPublishingService.swift:159,175,198,210,227,238`, `.../TalentMatchingService.swift:149-153`.
+- function-level authorization
+  - Conclusion: **Pass**
+  - Evidence: Role enforcement gates across checkout/after-sales/content/seat/talent/messaging: `repo/Sources/RailCommerce/Services/CheckoutService.swift:129`, `repo/Sources/RailCommerce/Services/AfterSalesService.swift:200`, `repo/Sources/RailCommerce/Services/ContentPublishingService.swift:159`, `repo/Sources/RailCommerce/Services/SeatInventoryService.swift:133`, `repo/Sources/RailCommerce/Services/TalentMatchingService.swift:176`.
 
-- tenant / user data isolation: **Pass (single-tenant scope)**
-  - User-level isolation APIs exist for orders/requests/messages.
-  - Evidence: `repo/Sources/RailCommerce/Services/CheckoutService.swift:255-264`, `.../AfterSalesService.swift:350-372`, `.../MessagingService.swift:192-199`.
+- tenant / user isolation
+  - Conclusion: **Partial Pass**
+  - Evidence: User-scoped carts/addresses/orders and visibility APIs are present: `repo/Sources/RailCommerce/RailCommerce.swift:97`, `repo/Sources/RailCommerce/Models/Address.swift:150`, `repo/Sources/RailCommerce/Services/CheckoutService.swift:262`, `repo/Sources/RailCommerce/Services/AfterSalesService.swift:345`.
+  - Note: UI role-flow gaps still weaken practical least-privilege requirement fit for business workflows.
 
-- admin / internal / debug protection: **Partial Pass**
-  - Role-policy matrix and service checks protect privileged actions.
-  - Debug credential seeding is gated by `#if DEBUG`.
-  - Evidence: `repo/Sources/RailCommerce/Models/Roles.swift:31-38`, `repo/Sources/RailCommerceApp/AppDelegate.swift:38-40,163-175`.
-  - Residual risk: security guarantees for inbound messaging moderation are incomplete (see High issue #2).
+- admin / internal / debug protection
+  - Conclusion: **Partial Pass**
+  - Evidence: No admin/debug network endpoints; role checks handled in service layer. DEBUG credential seeding is compile-gated: `repo/Sources/RailCommerceApp/AppDelegate.swift:41`.
 
-## 7. Tests and Logging Review
+7. Tests and Logging Review
 
-- Unit tests: **Pass**
-  - Broad unit coverage exists across services, auth, persistence, security utility, and lifecycle behavior.
-  - Evidence: `repo/Tests/RailCommerceTests/*.swift`, e.g., `CheckoutServiceTests.swift`, `AfterSalesServiceTests.swift`, `MessagingServiceTests.swift`, `ContentPublishingServiceTests.swift`.
+- Unit tests
+  - Conclusion: **Pass**
+  - Rationale: Extensive service-layer unit coverage exists across security, persistence wiring, promotion, after-sales, inventory, content, messaging.
+  - Evidence: `repo/Tests/RailCommerceTests/CheckoutServiceTests.swift:4`, `repo/Tests/RailCommerceTests/IdentityBindingTests.swift:6`, `repo/Tests/RailCommerceTests/AfterSalesIsolationTests.swift:5`, `repo/Tests/RailCommerceTests/InboundMessagingValidationTests.swift:10`.
 
-- API / integration tests: **Partial Pass**
-  - Integration-style service-flow tests exist (`IntegrationTests.swift`) and transport integration tests exist (`MessageTransportTests.swift`).
-  - No runtime UI/integration tests for app-layer UIKit flows.
-  - Evidence: `repo/Tests/RailCommerceTests/IntegrationTests.swift:8-266`, `MessageTransportTests.swift:92-107`.
+- API / integration tests
+  - Conclusion: **Partial Pass**
+  - Rationale: No HTTP API layer (N/A), but integration-style service tests exist; app-layer tests are mostly VC load/smoke.
+  - Evidence: `repo/Tests/RailCommerceTests/IntegrationTests.swift:6`, `repo/Tests/RailCommerceAppTests/RoleViewControllerMatrixTests.swift:23`.
 
-- Logging categories / observability: **Pass**
-  - Structured categories and centralized redaction are implemented.
-  - Evidence: `repo/Sources/RailCommerce/Core/Logger.swift:4-14,84-104`, `repo/Sources/RailCommerceApp/AppDelegate.swift:260-284`.
+- Logging categories / observability
+  - Conclusion: **Pass**
+  - Rationale: Closed category taxonomy and redaction layer implemented; tested with logger tests.
+  - Evidence: `repo/Sources/RailCommerce/Core/Logger.swift:4`, `repo/Sources/RailCommerce/Core/Logger.swift:86`, `repo/Tests/RailCommerceTests/LoggerTests.swift:115`.
 
-- Sensitive-data leakage risk in logs / responses: **Partial Pass**
-  - Log redaction exists and is tested (`LoggerTests.swift:64-104`).
-  - Messaging service logs masked bodies on enqueue, reducing direct leakage (`MessagingService.swift:240-249`).
-  - Residual risk remains for inbound moderation bypass (content acceptance path itself).
+- Sensitive-data leakage risk in logs / responses
+  - Conclusion: **Partial Pass**
+  - Rationale: SSN/card/phone/email redaction and message-body scanners are present; still requires runtime log-stream verification on iOS for full confidence.
+  - Evidence: `repo/Sources/RailCommerce/Core/Logger.swift:86`, `repo/Sources/RailCommerce/Services/MessagingService.swift:221`, `repo/Tests/RailCommerceTests/LoggerTests.swift:66`, `repo/Tests/RailCommerceTests/InboundMessagingValidationTests.swift:37`.
+  - Manual verification required: inspect device/simulator log output categories under real app sessions.
 
-## 8. Test Coverage Assessment (Static Audit)
+8. Test Coverage Assessment (Static Audit)
 
 ### 8.1 Test Overview
-- Unit tests exist: **Yes** (`repo/Tests/RailCommerceTests/*`)
-- API/integration-style tests exist: **Yes** (`IntegrationTests.swift`, transport + composition tests)
-- Test frameworks: **XCTest**
-- Test entry points:
-  - Package test target in `repo/Package.swift:42-49`
-  - Script entry in `repo/run_tests.sh:1-65`
-- Documentation provides test commands: **Yes** (`repo/README.md:104-133`)
+- Unit tests exist: Yes (`repo/Tests/RailCommerceTests/*.swift`).
+- API/integration tests exist: Service integration exists (`repo/Tests/RailCommerceTests/IntegrationTests.swift:6`); no HTTP API tests (no API layer).
+- iOS app-layer tests exist: Yes (`repo/Tests/RailCommerceAppTests/*.swift`).
+- Test frameworks: XCTest via SwiftPM and Xcode test target.
+- Test entry points documented: `./run_tests.sh`, `./run_ios_tests.sh` in README.
+- Evidence: `repo/Package.swift:49`, `repo/README.md:119`, `repo/README.md:144`, `repo/run_tests.sh:38`, `repo/run_ios_tests.sh:67`.
 
 ### 8.2 Coverage Mapping Table
-
 | Requirement / Risk Point | Mapped Test Case(s) | Key Assertion / Fixture / Mock | Coverage Assessment | Gap | Minimum Test Addition |
 |---|---|---|---|---|---|
-| Deterministic promotions (<=3, no percent stacking, line explanation) | `PromotionEngineTests.swift:27-51,86-104` | asserts rejected reason `percent-off-stacking-blocked`; max-3 enforcement | sufficient | none material | Add property-based edge test for large carts + mixed priorities |
-| Checkout idempotency + 10s duplicate lockout | `CheckoutServiceTests.swift:44-72`; `IdentityBindingTests.swift:57-73` | duplicate within lockout rejected; permanent idempotency check | sufficient | none material | Add explicit repeated-submit same ID with persistence restore scenario |
-| Checkout tamper hashing and verification | `CheckoutServiceTests.swift:108-124`; `OrderHasherTests.swift:21-30` | tampered snapshot throws `.tamperDetected` | sufficient | none material | Add test for hash mismatch after persistence reload |
-| After-sales SLA + automation rules | `AfterSalesServiceTests.swift:111-177` | 4h/3d SLA flags, auto-approve and auto-reject assertions | sufficient | none material | Add boundary tests for exact 48h and exact 14-day edges with calendar transitions |
-| Seat inventory reserve/confirm/release + 15-min expiry + atomic rollback | `SeatInventoryServiceTests.swift:17-149`; `IntegrationTests.swift:93-124` | expiry after 16 min, atomic rollback restores state | sufficient | none material | Add concurrency stress test (static note only) |
-| Content draft→review→publish/schedule/rollback + version cap | `ContentPublishingServiceTests.swift:13-246`; `FunctionLevelAuthTests.swift:138-163` | state transitions + reviewer/editor separation | sufficient | none material | Add test for media reference persistence and rollback across many versions |
-| Messaging safety pipeline (outbound): sensitive blocking, masking, attachments, harassment/block/report | `MessagingServiceTests.swift:39-99`; `ReportControlTests.swift:11-100` | asserts for SSN/card block, masking, attachment size, block/report behavior | basically covered | inbound transport path not covered | Add inbound-message validation tests through transport receive path |
-| Object-level isolation (after-sales/messages) | `AfterSalesIsolationTests.swift:18-113`; `IdentityBindingTests.swift:108-149`; `AuditV6ClosureTests.swift:163-230` | spoofed target blocked; non-participant thread access rejected | sufficient | none material | Add negative tests for mixed role transitions in same thread |
-| Persistence hydration across services | `PersistenceWiringTests.swift:11-153` | re-instantiated services load prior state | sufficient | none material | Add corruption-handling test cases |
-| Logging redaction | `LoggerTests.swift:64-104` | email/SSN/card/phone redaction asserted | sufficient | no app-level logger integration test | Add integration test that service log writes remain redacted end-to-end |
-| iOS camera permission config contract | `AppConfigAssertionTests.swift` | tests verify local-network/BG keys only | missing | no static assertion for `NSCameraUsageDescription` | Add failing assertion for required camera usage key |
-| Inbound messaging policy parity | `MessageTransportTests.swift:92-107` | only happy path “hi” delivery tested | insufficient | bypass defect not tested | Add tests asserting inbound sensitive/blocked payload rejection |
+| Promotion pipeline max-3 + no percent stacking + deterministic behavior | `repo/Tests/RailCommerceTests/PromotionEngineTests.swift:39`, `:27`, `:116` | Rejected codes and ordering assertions (`:39-52`, `:27-37`, `:116-126`) | sufficient | None major | Add UI-level promo application test in checkout VC |
+| Checkout idempotency + duplicate lockout + tamper verify | `repo/Tests/RailCommerceTests/CheckoutServiceTests.swift:44`, `:108`; `repo/Tests/RailCommerceTests/IdentityBindingTests.swift:57` | Duplicate rejection and tamper detection assertions (`CheckoutServiceTests.swift:50-55`, `:120-123`) | basically covered | No app-layer test that submit button lockout and reused order ID behave correctly in UI | Add `CheckoutViewController` UI-action test for repeated tap behavior |
+| Authentication/password policy/biometric account binding | `repo/Tests/RailCommerceTests/CredentialStoreTests.swift:37`, `repo/Tests/RailCommerceTests/BiometricBoundAccountTests.swift:63` | Policy + verify + bound-account resolution assertions | basically covered | Login VC tests do not exercise sign-in actions end-to-end | Add app-layer login action tests for password success/failure and biometric mismatch |
+| After-sales object isolation + SLA + automation | `repo/Tests/RailCommerceTests/AfterSalesIsolationTests.swift:18`, `repo/Tests/RailCommerceTests/AfterSalesServiceTests.swift:111`, `:135`, `:166` | Visibility enforcement and SLA/automation status assertions | sufficient | Limited app-layer tests for CSR/customer case-thread behavior | Add VC tests for case thread authorization failures and notifications |
+| Messaging moderation + inbound safety + report/block controls | `repo/Tests/RailCommerceTests/MessagingServiceTests.swift:39`, `repo/Tests/RailCommerceTests/InboundMessagingValidationTests.swift:22`, `repo/Tests/RailCommerceTests/ReportControlTests.swift:11` | SSN/card/harassment/drop/masking/report blocking assertions | sufficient | No app-layer tests for recipient picker/report UI actions | Add `MessagingViewController` interaction tests with mocked transport |
+| Seat inventory atomicity/reservation expiry/rollback | `repo/Tests/RailCommerceTests/SeatInventoryServiceTests.swift:123`, `:43`, `:141` | Atomic rollback, expiry, snapshot rollback assertions | sufficient (service) | Checkout UI does not exercise seat transaction path | Add end-to-end checkout test that passes seats and verifies no oversell path |
+| Content workflow (draft→review→publish, schedule, rollback, SoD) | `repo/Tests/RailCommerceTests/ContentPublishingServiceTests.swift:22`, `:123`; `repo/Tests/RailCommerceTests/FunctionLevelAuthTests.swift:138` | State transition and cannot-approve-own-draft assertions | basically covered | UI tests only load content VCs; no action-path validation | Add app-layer tests for submit/review/approve/schedule/rollback actions |
+| Tenant/user isolation (cart/address/order/message/after-sales) | `repo/Tests/RailCommerceTests/AfterSalesIsolationTests.swift:61`, `repo/Tests/RailCommerceTests/IdentityBindingTests.swift:110`, `repo/Tests/RailCommerceAppTests/CartBrowseCheckoutFlowTests.swift:37` | Spoofed-target forbidden + user-scoped cart/address checks | basically covered | No explicit test proving Sales Agent role can complete on-behalf sale in UI | Add role-flow UI tests for sales agent transaction path |
+| Logging redaction and category taxonomy | `repo/Tests/RailCommerceTests/LoggerTests.swift:66`, `:100`, `:115` | Redaction replacement and category set assertions | sufficient | Runtime `os.Logger` behavior not directly validated | Add iOS app-layer log capture assertions where feasible |
 
 ### 8.3 Security Coverage Audit
-- authentication: **basically covered**
-  - Credential and biometric binding tests exist (`CredentialStoreTests`, `BiometricBoundAccountTests`, `BiometricAuthTests`).
-- route authorization: **not applicable**
-  - No route surface.
-- object-level authorization: **covered**
-  - Dedicated isolation tests for after-sales/messages and case-thread participation.
-- tenant / data isolation: **basically covered (single-tenant model)**
-  - User-level isolation covered; no tenant model in scope.
-- admin / internal protection: **basically covered**
-  - Function-level auth tests cover role gating extensively.
-- residual severe-undetected risk:
-  - Inbound message moderation/validation parity is not meaningfully tested and defect is present.
+- authentication
+  - Coverage conclusion: **Basically covered**
+  - Evidence: credential policy/verify and biometric account-binding tests (`CredentialStoreTests.swift:37`, `BiometricBoundAccountTests.swift:63`).
+  - Residual risk: Login VC user-action paths not deeply tested.
+
+- route authorization
+  - Coverage conclusion: **Not Applicable**
+  - Evidence: no route layer exists.
+
+- object-level authorization
+  - Coverage conclusion: **Basically covered**
+  - Evidence: after-sales/message isolation tests (`AfterSalesIsolationTests.swift:61`, `IdentityBindingTests.swift:119`).
+  - Residual risk: app-layer misuse paths not heavily tested.
+
+- tenant / data isolation
+  - Coverage conclusion: **Basically covered**
+  - Evidence: user-scoped cart/address/order tests (`CartBrowseCheckoutFlowTests.swift:37`, `:65`, `CheckoutServiceTests.swift:183`).
+  - Residual risk: UI role-flow mismatches still allow requirement drift despite service-level isolation.
+
+- admin / internal protection
+  - Coverage conclusion: **Cannot confirm**
+  - Evidence: no admin/internal endpoint surface to test; checks are role-policy based at service layer.
 
 ### 8.4 Final Coverage Judgment
 - **Partial Pass**
-- Covered major risks:
-  - Core business logic, role-based authorization, idempotency/tamper checks, automation rules, persistence hydration.
-- Uncovered/insufficient areas that could allow severe defects while tests still pass:
-  - Inbound messaging safety/control parity.
-  - iOS camera-permission plist contract.
-  - Runtime-only UX/performance constraints (cold-start target, split-view/rotation quality) remain outside static proof.
+- Covered well: service-layer validation/authz/isolation, promotion rules, checkout hash/idempotency, after-sales automation, messaging moderation.
+- Not adequately covered for prompt-risk closure: app-layer role workflows and end-to-end UI integration of critical requirements (Sales Agent sales flow, checkout-seat oversell coupling, chat attachment UX). Severe defects in these areas could remain while current tests still pass.
 
-## 9. Final Notes
-- Audit conclusions are static and evidence-based; runtime claims were not inferred.
-- Highest-priority remediation path:
-  1. Fix camera usage plist blocker.
-  2. Enforce inbound messaging through the same safety policy as outbound.
-  3. Wire real user-activity tracking for heavy-work gating correctness.
+9. Final Notes
+- This audit is static-only and evidence-bound.
+- Strong service-layer engineering is present, but high-severity prompt-fit gaps remain in user-facing integration paths.
+- Runtime claims (performance, split-view behavior details, background scheduling outcomes, local peer networking reliability) remain manual-verification items.

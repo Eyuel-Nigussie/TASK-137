@@ -35,7 +35,15 @@ public final class DiskFileStore: AttachmentFileStore {
         let url = URL(fileURLWithPath: path)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                  withIntermediateDirectories: true)
+        // `.completeFileProtection` is an Apple-platform-only
+        // `Data.WritingOptions` value; it does not exist on Linux
+        // Foundation. Linux writes without that option — the iOS build
+        // keeps the Keychain-style file protection guarantee.
+        #if canImport(Darwin)
         try data.write(to: url, options: .completeFileProtection)
+        #else
+        try data.write(to: url)
+        #endif
     }
     public func read(from path: String) throws -> Data {
         try Data(contentsOf: URL(fileURLWithPath: path))
