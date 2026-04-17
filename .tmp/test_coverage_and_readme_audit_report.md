@@ -1,20 +1,37 @@
 # Test Coverage Audit
 
 ## Project Type Detection
-- Inferred project type: **ios**.
-- Evidence: `repo/README.md:3`, `repo/README.md:26`.
+- Declared type: **ios**.
+- Evidence: `repo/README.md:3`.
 
 ## Backend Endpoint Inventory
-- Total HTTP endpoints discovered: **0**.
+- Endpoint inventory result: **0 HTTP endpoints**.
 - Evidence:
   - `docs/apispec.md:7` (`No REST APIs`)
   - `docs/apispec.md:8` (`No HTTP endpoints`)
   - `docs/apispec.md:12` (`No backend server`)
+  - Static scan found no HTTP routing/server code under `repo/Sources`.
 
 ## API Test Mapping Table
-| Endpoint (METHOD + PATH) | Covered | Test type | Test files | Evidence |
+| Endpoint (METHOD + PATH) | Covered | Test Type | Test Files | Evidence |
 |---|---|---|---|---|
 | N/A (no HTTP endpoint surface) | N/A | N/A | N/A | `docs/apispec.md:7-12` |
+
+## API Test Classification
+1. True No-Mock HTTP: **0**
+2. HTTP with Mocking: **0**
+3. Non-HTTP (unit/integration without HTTP): **55 files total**
+
+Breakdown:
+- `RailCommerceTests`: **49** files
+- `RailCommerceAppTests`: **6** files
+
+## Mock Detection
+- No Jest/Vitest/Sinon stack found (Swift/XCTest project).
+- Dependency injection + fakes/in-memory substitutes are present in non-HTTP tests.
+- Evidence:
+  - `repo/Tests/RailCommerceTests/IntegrationTests.swift:10-14` (`FakeClock`, `InMemoryKeychain`, `FakeCamera`, `FakeBattery`)
+  - `repo/Tests/RailCommerceTests/CoverageBoostTests.swift:15-50` (custom failing stores/test doubles)
 
 ## Coverage Summary
 - Total endpoints: **0**
@@ -26,80 +43,73 @@
 ## Unit Test Summary
 
 ### Backend Unit Tests
-- Present: **YES** (49 files in `repo/Tests/RailCommerceTests`).
+- Present: **YES**.
+- Test files: 49 files under `repo/Tests/RailCommerceTests`.
 - Modules covered (evidence examples):
-  - Services: `CheckoutServiceTests`, `AfterSalesServiceTests`, `MessagingServiceTests`, `SeatInventoryServiceTests`, `ContentPublishingServiceTests`, `MembershipServiceTests`
-  - Auth/security/core: `AuthorizationTests`, `FunctionLevelAuthTests`, `CredentialStoreTests`, `KeychainStoreTests`, `PersistenceStoreTests`
-  - Cross-module integration: `IntegrationTests`
-- Important backend modules not tested: no explicit HTTP server/controller/router layer exists to test.
+  - Services: `CheckoutServiceTests`, `AfterSalesServiceTests`, `MessagingServiceTests`, `SeatInventoryServiceTests`, `ContentPublishingServiceTests`, `MembershipServiceTests`, `TalentMatchingServiceTests`
+  - Auth/security/persistence/core: `AuthorizationTests`, `FunctionLevelAuthTests`, `CredentialStoreTests`, `KeychainStoreTests`, `PersistenceStoreTests`, `SecureStoreProtocolTests`
+- Important backend modules not directly test-targeted:
+  - `Sources/RailCommerceDemo/main.swift` (no dedicated test file asserting demo executable behavior).
 
 ### Frontend Unit Tests
 - iOS app-layer tests: **PRESENT**.
-- Framework: XCTest (Xcode test target).
-- Evidence:
-  - `repo/Tests/RailCommerceAppTests/LoginViewControllerTests.swift:3` (`@testable import RailCommerceApp`)
-  - `repo/Tests/RailCommerceAppTests/CartBrowseCheckoutFlowTests.swift:3`
-  - `repo/Tests/RailCommerceAppTests/SystemKeychainTests.swift:2`
-  - `repo/Tests/RailCommerceAppTests/SystemProvidersTests.swift:3`
-  - `repo/Tests/RailCommerceAppTests/AppShellFactoryTests.swift:3`
+- Framework/tool: XCTest (`@testable import RailCommerceApp`).
+- Frontend test files:
+  - `repo/Tests/RailCommerceAppTests/LoginViewControllerTests.swift`
+  - `repo/Tests/RailCommerceAppTests/CartBrowseCheckoutFlowTests.swift`
+  - `repo/Tests/RailCommerceAppTests/RoleViewControllerMatrixTests.swift`
+  - `repo/Tests/RailCommerceAppTests/SystemKeychainTests.swift`
+  - `repo/Tests/RailCommerceAppTests/SystemProvidersTests.swift`
+  - `repo/Tests/RailCommerceAppTests/AppShellFactoryTests.swift`
 - Components/modules covered:
-  - `LoginViewController`, `BrowseViewController`, `CartViewController`, `CheckoutViewController`, `SystemKeychain`, `SystemProviders`, `AppShellFactory`
-- Important frontend components/modules not tested (visible gap):
-  - No explicit tests found for `MainTabBarController`, `MainSplitViewController`, `MessagingViewController`, `MembershipViewController`, `AfterSalesViewController`, `SeatInventoryViewController`, `ContentPublishingViewController`, `TalentMatchingViewController`.
+  - `LoginViewController`, `BrowseViewController`, `CartViewController`, `CheckoutViewController`
+  - `MainTabBarController`, `MainSplitViewController`
+  - `SeatInventoryViewController`, `ContentPublishingViewController`, `ContentBrowseViewController`, `TalentMatchingViewController`, `MembershipViewController`, `AfterSalesCaseThreadViewController`
+  - `SystemKeychain`, `SystemBattery`, `ActivityTrackingWindow`, `AppShellFactory`
+- Important frontend components/modules not clearly tested:
+  - `MultipeerMessageTransport`
+  - `AfterSalesViewController` (thread controller is covered, primary view controller not explicitly evidenced in app-test names)
 
 Mandatory verdict: **Frontend unit tests: PRESENT**
 
-## API Test Classification
-1. True No-Mock HTTP: **0**
-2. HTTP with Mocking: **0**
-3. Non-HTTP (unit/integration without HTTP): **54 files total**
-- `RailCommerceTests`: 49 files
-- `RailCommerceAppTests`: 5 files
-
-## Mock Detection
-- No Jest/Vitest/Sinon stack (Swift/XCTest).
-- Test doubles / DI overrides are present in non-HTTP tests.
-- Evidence:
-  - `repo/Tests/RailCommerceTests/IntegrationTests.swift:10-14` (`FakeClock`, `InMemoryKeychain`, `FakeCamera`, `FakeBattery`)
-  - `repo/Tests/RailCommerceTests/CoverageBoostTests.swift:15-50` (custom failing stores)
+### Cross-Layer Observation
+- Current test distribution is substantially balanced: heavy domain coverage plus dedicated iOS app-layer tests.
 
 ## API Observability Check
-- Not applicable: no HTTP endpoints exist, therefore no HTTP method/path/request/response assertions exist.
+- Not applicable for HTTP request/response observability because no HTTP API exists.
 
-## Test Quality & Sufficiency
-- Strengths:
-  - Broad service and cross-module assertions.
-  - Explicit iOS app-target tests are present.
-  - README-reported library coverage is >90% (static evidence only).
-- Gaps:
-  - No HTTP-layer test surface by architecture.
-  - `run_tests.sh` is local toolchain dependent (not Docker-based).
-
-## `run_tests.sh` Check
-- `run_tests.sh` executes `swift test --enable-code-coverage` on macOS.
-- Per strict rule: local dependency => **FLAG**.
-- Evidence: `repo/run_tests.sh:38-50`.
+## Tests Check
+- Success/failure/edge/auth/rollback depth: strong in core suite (e.g., `CoverageBoostTests`, `AuthorizationTests`, `IntegrationTests`).
+- Assertions are generally meaningful (state + error-path verification, not pass/fail only).
+- `run_tests.sh` check (strict rule): **FLAG** (local toolchain dependency; not Docker-based).
+  - Evidence: `repo/run_tests.sh:17-39`.
+- `run_ios_tests.sh` is also local macOS/Xcode-based.
+  - Evidence: `repo/run_ios_tests.sh:12-20`, `repo/run_ios_tests.sh:67-73`.
 
 ## End-to-End Expectations
-- For iOS/no-backend architecture, FE↔BE HTTP E2E is not applicable.
-- Portable Docker E2E claim is currently inconsistent with actual container behavior (see README audit).
+- iOS/offline architecture has no FE↔BE HTTP E2E surface.
+- README currently documents Docker as a placeholder-only gate, not real app test execution.
+  - Evidence: `repo/README.md:17-25`, `repo/README.md:99-117`, `repo/Dockerfile:17-22`.
 
 ## Test Coverage Score (0–100)
-- **86/100**
+- **90/100**
 
 ## Score Rationale
-- Strong breadth in core + app-layer tests (+)
-- Frontend/app-layer unit tests now present (+)
-- No HTTP endpoint/test surface (neutral by architecture)
-- Local-only `run_tests.sh` dependency flagged (-)
+- Strong backend depth and broad app-layer UIKit test presence.
+- Coverage evidence reported >90% in README for library metrics.
+- Deductions:
+  - No HTTP API route testing (architectural absence)
+  - Strict `run_tests.sh` Docker-based criterion not met
+  - Some app modules (e.g., multipeer transport) not clearly test-covered
 
 ## Key Gaps
-1. No HTTP endpoint testing possible because no HTTP endpoint surface exists.
-2. Coverage numbers are accepted from README as static evidence; not independently executed in this audit.
+1. No HTTP endpoint tests are possible because there is no HTTP endpoint surface.
+2. `run_tests.sh` is local/macOS-dependent, so strict Docker-based test-run criterion remains unmet.
+3. Some app-specific infrastructure paths (notably `MultipeerMessageTransport`) lack explicit test evidence.
 
 ## Confidence & Assumptions
-- Confidence: **High** for file-level evidence; **medium** for numeric coverage claims (static-only).
-- Assumption: README-reported coverage metrics reflect latest executed results.
+- Confidence: **High**.
+- Assumption: README coverage claims are treated as documented evidence (static inspection only; no test execution performed).
 
 ## Test Coverage Verdict
 - **PASS**
@@ -109,56 +119,54 @@ Mandatory verdict: **Frontend unit tests: PRESENT**
 # README Audit
 
 ## README Location
-- Present: `repo/README.md`.
+- Exists at required path: `repo/README.md`.
 
-## Hard Gate Results
+## Hard Gates (ALL must pass)
 
 ### Formatting
-- PASS: readable markdown, clear sections/tables.
+- PASS.
+- Evidence: structured markdown with clear sections/tables (`repo/README.md`).
 
 ### Startup Instructions
-- iOS startup instructions with simulator/Xcode flow are present.
-- Evidence: `repo/README.md:69-94`.
+- iOS gate: PASS (Xcode + simulator steps are present).
+- Evidence: `repo/README.md:74-97`.
 
 ### Access Method
-- PASS: explicit simulator access and success signals.
-- Evidence: `repo/README.md:78-93`.
+- PASS (explicit simulator launch/access signals).
+- Evidence: `repo/README.md:83-95`.
 
 ### Verification Method
-- **FAIL** (evidence mismatch).
-- README claims `docker compose up` runs `RailCommerceDemo` end-to-end:
-  - `repo/README.md:100`, `repo/README.md:105`, `repo/README.md:113-114`
-- Current Dockerfile is placeholder-only echo/exit-0 container; it does not run demo logic:
-  - `repo/Dockerfile:13-22`
-- Therefore verification claim is not supported by current implementation.
+- PASS (explicit expected outputs and success signals for run/test paths).
+- Evidence: `repo/README.md:81-117`, `repo/README.md:130-163`.
 
 ### Environment Rules (STRICT)
-- **FAIL** under strict literal interpretation (`Everything must be Docker-contained`).
-- README still requires macOS + Xcode scripts for real app build/test:
-  - `repo/README.md:58-67`, `repo/README.md:71-76`, `repo/README.md:122-125`, `repo/README.md:143-146`
+- **FAIL** under literal strict gate.
+- Rule requires Docker-contained workflow; README explicitly states real build/test workflows are macOS scripts and container is placeholder-only.
+- Evidence:
+  - `repo/README.md:17-19`
+  - `repo/README.md:25`
+  - `repo/README.md:99-117`
+  - `repo/Dockerfile:13-22`
 
 ### Demo Credentials (Conditional)
-- PASS: credentials include username + password + all roles.
-- Evidence: `repo/README.md:173-180`.
+- PASS (username + password + all roles provided).
+- Evidence: `repo/README.md:176-183`.
 
 ## Engineering Quality
-- Strong architecture and workflow explanation.
-- Clear credentials and role mapping.
-- Main weakness: container verification section currently overstates what `docker compose up` does in current codebase.
+- High clarity and strong explanation of constraints, workflows, and verification outputs.
+- However, strict environment rule remains unmet by declared design.
 
 ## High Priority Issues
-1. README verification claim for Docker end-to-end demo conflicts with actual Dockerfile behavior (`README` says demo run; Dockerfile is placeholder echo/exit).
-2. Strict Docker-contained hard gate remains unmet for iOS build/test paths.
+1. Hard-gate conflict: workflow is not Docker-contained for real build/test execution (`README` states macOS-only scripts are required).
 
 ## Medium Priority Issues
-1. None beyond above hard-gate/verification mismatches.
+1. Docker steps are placeholder-only and do not validate application behavior, only CI gate compatibility.
 
 ## Low Priority Issues
-1. None significant.
+1. None material.
 
 ## Hard Gate Failures
-1. Verification Method: **FAIL** (claim/implementation mismatch)
-2. Environment Rules (STRICT): **FAIL**
+1. Environment Rules (STRICT): **FAIL**
 
 ## README Verdict
 - **FAIL**
