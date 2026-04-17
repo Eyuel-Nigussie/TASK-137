@@ -113,46 +113,37 @@ echo ">>> [2/2] Running iOS app-layer tests via 'xcodebuild test' on simulator $
 # CODE_SIGN_STYLE=Manual prevents Xcode from trying to contact Apple to
 # provision a team profile.
 #
-# We also pre-resolve SPM packages and strip extended attributes from the
-# working tree + derived data directory. macOS Gatekeeper sometimes stamps
-# files under ~/Documents (and anywhere else it inspects) with xattrs like
-# com.apple.quarantine / com.apple.provenance / com.apple.FinderInfo, which
-# then propagate into SPM framework bundles. `codesign` rejects those with
-# "resource fork, Finder information, or similar detritus not allowed". A
-# single `xattr -cr` pass clears them so ad-hoc signing succeeds.
-echo ">>> Pre-resolving SPM packages so xattrs can be stripped before signing..."
-xcodebuild -resolvePackageDependencies \
-    -project "$PROJECT" \
-    -scheme "$SCHEME" \
-    -derivedDataPath "./build" >/dev/null
-echo ">>> Stripping extended attributes (com.apple.quarantine et al.)..."
-xattr -cr . 2>/dev/null || true
-xattr -cr ./build 2>/dev/null || true
+# We do NOT pass -derivedDataPath here. Xcode's default DerivedData
+# location (~/Library/Developer/Xcode/DerivedData/) is outside
+# ~/Documents, so the framework bundle is never exposed to Documents'
+# Spotlight / iCloud / Gatekeeper xattr stamping. codesign then
+# succeeds on the first attempt — no retry loop, no xattr scrubbing
+# race, no Documents-folder gotcha. The xcresult bundle is pinned via
+# -resultBundlePath so the coverage reader can still find it.
+RESULT_BUNDLE="$PWD/build/TestResult.xcresult"
+rm -rf "$RESULT_BUNDLE"
+mkdir -p "$PWD/build"
 
-# Clean only the compiled products (./build/Build) — keep the downloaded
-# SPM checkouts in ./build/SourcePackages so we don't re-fetch Realm (~100MB).
-# This guarantees we never reuse a half-built framework left behind by a
-# previous codesign failure (symptom: "no such file" for the Mach-O binary
-# inside an otherwise-valid-looking RealmSwift.framework bundle).
-echo ">>> Removing stale compiled products while preserving SPM checkouts..."
-rm -rf ./build/Build ./build/Intermediates.noindex
+# Defensive: strip any xattrs already on the source tree. The build
+# output lives in default DerivedData (outside Documents) so this is
+# only a precaution.
+xattr -cr . 2>/dev/null || true
 
 xcodebuild test \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -destination "platform=iOS Simulator,id=${SIM_UDID}" \
-    -derivedDataPath "./build" \
+    -resultBundlePath "$RESULT_BUNDLE" \
     -enableCodeCoverage YES \
     CODE_SIGN_IDENTITY="-" \
     CODE_SIGN_STYLE=Manual \
     DEVELOPMENT_TEAM="" \
     PROVISIONING_PROFILE_SPECIFIER=""
 
-XCRESULT=$(ls -td ./build/Logs/Test/*.xcresult 2>/dev/null | head -1)
-if [[ -n "${XCRESULT:-}" ]]; then
+if [[ -d "$RESULT_BUNDLE" ]]; then
     echo
     echo ">>> iOS code coverage (target summary)"
-    xcrun xccov view --only-targets --report "$XCRESULT" 2>/dev/null | head -20 || true
+    xcrun xccov view --only-targets --report "$RESULT_BUNDLE" 2>/dev/null | head -20 || true
 fi
 
 echo
