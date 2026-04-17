@@ -105,15 +105,16 @@ final class AuthorizationTests: XCTestCase {
 
     func testAfterSalesApproveAllowedForCSR() throws {
         let (svc, req) = afterSalesSetup()
+        let customer = User(id: "c1", displayName: "Alice", role: .customer)
         let csr = User(id: "s1", displayName: "Chris", role: .customerService)
-        try svc.open(req)
+        try svc.open(req, actingUser: customer)
         XCTAssertNoThrow(try svc.approve(id: req.id, actingUser: csr))
     }
 
     func testAfterSalesApproveForbiddenForCustomer() throws {
         let (svc, req) = afterSalesSetup()
         let customer = User(id: "c1", displayName: "Alice", role: .customer)
-        try svc.open(req)
+        try svc.open(req, actingUser: customer)
         XCTAssertThrowsError(try svc.approve(id: req.id, actingUser: customer)) { err in
             if case .forbidden = err as? AuthorizationError { /* expected */ }
             else { XCTFail("Expected AuthorizationError.forbidden") }
@@ -122,15 +123,16 @@ final class AuthorizationTests: XCTestCase {
 
     func testAfterSalesRejectAllowedForCSR() throws {
         let (svc, req) = afterSalesSetup()
+        let customer = User(id: "c1", displayName: "Alice", role: .customer)
         let csr = User(id: "s1", displayName: "Chris", role: .customerService)
-        try svc.open(req)
+        try svc.open(req, actingUser: customer)
         XCTAssertNoThrow(try svc.reject(id: req.id, actingUser: csr))
     }
 
     func testAfterSalesRejectForbiddenForCustomer() throws {
         let (svc, req) = afterSalesSetup()
         let customer = User(id: "c1", displayName: "Alice", role: .customer)
-        try svc.open(req)
+        try svc.open(req, actingUser: customer)
         XCTAssertThrowsError(try svc.reject(id: req.id, actingUser: customer)) { err in
             if case .forbidden = err as? AuthorizationError { /* expected */ }
             else { XCTFail("Expected AuthorizationError.forbidden") }
@@ -171,22 +173,23 @@ final class AuthorizationTests: XCTestCase {
     func testSeatConfirmAllowedForCustomer() throws {
         let (svc, key) = seatSetup()
         let customer = User(id: "c1", displayName: "Alice", role: .customer)
-        try svc.reserve(key, holderId: "c1")
+        try svc.reserve(key, holderId: "c1", actingUser: customer)
         XCTAssertNoThrow(try svc.confirm(key, holderId: "c1", actingUser: customer))
     }
 
     func testSeatConfirmAllowedForSalesAgent() throws {
         let (svc, key) = seatSetup()
         let agent = User(id: "a1", displayName: "Sam", role: .salesAgent)
-        try svc.reserve(key, holderId: "a1")
+        try svc.reserve(key, holderId: "a1", actingUser: agent)
         // Sales agent has .processTransaction (not .purchase) — should still be permitted.
         XCTAssertNoThrow(try svc.confirm(key, holderId: "a1", actingUser: agent))
     }
 
     func testSeatConfirmForbiddenForReviewer() throws {
         let (svc, key) = seatSetup()
+        let customer = User(id: "c1", displayName: "Alice", role: .customer)
         let reviewer = User(id: "r1", displayName: "Rita", role: .contentReviewer)
-        try svc.reserve(key, holderId: "c1")
+        try svc.reserve(key, holderId: "c1", actingUser: customer)
         XCTAssertThrowsError(try svc.confirm(key, holderId: "c1", actingUser: reviewer)) { err in
             if case .forbidden = err as? AuthorizationError { /* expected */ }
             else { XCTFail("Expected AuthorizationError.forbidden") }
@@ -217,8 +220,8 @@ final class AuthorizationTests: XCTestCase {
     func testEditAllowedForEditorWithActingUser() throws {
         let svc = ContentPublishingService(clock: FakeClock(), battery: FakeBattery())
         let editor = User(id: "e1", displayName: "Eve", role: .contentEditor)
-        _ = svc.createDraft(id: "c1", kind: .travelAdvisory, title: "T",
-                            tag: TaxonomyTag(), body: "v1", editorId: editor.id)
+        _ = try svc.createDraft(id: "c1", kind: .travelAdvisory, title: "T",
+                                tag: TaxonomyTag(), body: "v1", editorId: editor.id, actingUser: editor)
         XCTAssertNoThrow(try svc.edit(id: "c1", body: "v2",
                                       editorId: editor.id, actingUser: editor))
     }
@@ -227,8 +230,8 @@ final class AuthorizationTests: XCTestCase {
         let svc = ContentPublishingService(clock: FakeClock(), battery: FakeBattery())
         let editor = User(id: "e1", displayName: "Eve", role: .contentEditor)
         let reviewer = User(id: "r1", displayName: "Rita", role: .contentReviewer)
-        _ = svc.createDraft(id: "c1", kind: .travelAdvisory, title: "T",
-                            tag: TaxonomyTag(), body: "v1", editorId: editor.id)
+        _ = try svc.createDraft(id: "c1", kind: .travelAdvisory, title: "T",
+                                tag: TaxonomyTag(), body: "v1", editorId: editor.id, actingUser: editor)
         XCTAssertThrowsError(try svc.edit(id: "c1", body: "v2",
                                           editorId: reviewer.id, actingUser: reviewer)) { err in
             if case .forbidden = err as? AuthorizationError { /* expected */ }

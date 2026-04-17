@@ -50,15 +50,20 @@ for sku in app.catalog.all { kv(sku.id, "\(sku.title) — $\(Double(sku.priceCen
 
 let editor = User(id: "e1", displayName: "Eve Editor", role: .contentEditor)
 let reviewer = User(id: "r1", displayName: "Rita Reviewer", role: .contentReviewer)
-_ = app.publishing.createDraft(id: "adv-1", kind: .travelAdvisory,
-                               title: "Snow Delay on Boston Line",
-                               tag: TaxonomyTag(region: .northeast),
-                               body: "Expect 30-min delays.", editorId: editor.id)
+let customerUser = User(id: "C1", displayName: "Alice Rider", role: .customer)
+let csrUser = User(id: "csr1", displayName: "Chris CSR", role: .customerService)
+
+_ = try app.publishing.createDraft(id: "adv-1", kind: .travelAdvisory,
+                                   title: "Snow Delay on Boston Line",
+                                   tag: TaxonomyTag(region: .northeast),
+                                   body: "Expect 30-min delays.", editorId: editor.id,
+                                   actingUser: editor)
 
 // MARK: Content lifecycle
 section("Content: draft → review → publish")
-_ = try app.publishing.edit(id: "adv-1", body: "Expect 45-min delays.", editorId: editor.id)
-try app.publishing.submitForReview(id: "adv-1")
+_ = try app.publishing.edit(id: "adv-1", body: "Expect 45-min delays.", editorId: editor.id,
+                            actingUser: editor)
+try app.publishing.submitForReview(id: "adv-1", actingUser: editor)
 try app.publishing.approve(id: "adv-1", reviewer: reviewer)
 if let item = app.publishing.get("adv-1") {
     ok("Advisory published")
@@ -117,7 +122,8 @@ section("Checkout (idempotent, hashed, sealed in Keychain)")
 let snap = try app.checkout.submit(orderId: "O-1001", userId: "C1", cart: cart,
                                    discounts: discounts,
                                    address: app.addressBook.defaultAddress!,
-                                   shipping: shipping, invoiceNotes: "Gift wrap")
+                                   shipping: shipping, invoiceNotes: "Gift wrap",
+                                   actingUser: customerUser)
 ok("Order O-1001 accepted — total $\(Double(snap.totalCents)/100)")
 kv("stored hash (16 hex)", String(app.checkout.storedHash(for: "O-1001")!.prefix(16)) + "…")
 try app.checkout.verify(snap)
@@ -127,7 +133,8 @@ step("Replaying same orderId within 10s…")
 do {
     _ = try app.checkout.submit(orderId: "O-1001", userId: "C1", cart: cart,
                                 discounts: discounts, address: address,
-                                shipping: shipping, invoiceNotes: "Gift wrap")
+                                shipping: shipping, invoiceNotes: "Gift wrap",
+                                actingUser: customerUser)
 } catch let err as CheckoutError {
     ok("Blocked as duplicate: \(err)")
 }
@@ -137,8 +144,8 @@ section("Seat inventory (atomic + 15-min locks + snapshots)")
 let seat = SeatKey(trainId: "NE1", date: "2024-01-02", segmentId: "NY-BOS",
                    seatClass: .economy, seatNumber: "12A")
 app.seatInventory.registerSeat(seat)
-app.seatInventory.snapshot(date: "2024-01-02")
-let res = try app.seatInventory.reserve(seat, holderId: "C1")
+try app.seatInventory.snapshot(date: "2024-01-02")
+let res = try app.seatInventory.reserve(seat, holderId: "C1", actingUser: customerUser)
 ok("Reserved seat 12A until \(res.expiresAt) (holder C1)")
 kv("state", app.seatInventory.state(seat)!.rawValue)
 clock.advance(by: 16 * 60)
@@ -150,9 +157,9 @@ clock.set(Date(timeIntervalSince1970: 1_704_103_200)) // reset
 let rma = AfterSalesRequest(id: "R-1", orderId: "O-1001", kind: .refundOnly,
                             reason: .defective, createdAt: clock.now(),
                             serviceDate: clock.now(), amountCents: 1_500)
-_ = try app.afterSales.open(rma)
+_ = try app.afterSales.open(rma, actingUser: customerUser)
 clock.advance(by: 60 * 60) // 1h later CSR responds
-try app.afterSales.respond(id: "R-1")
+try app.afterSales.respond(id: "R-1", actingUser: csrUser)
 let sla = app.afterSales.sla(for: "R-1")!
 kv("first response due", sla.firstResponseDue)
 kv("resolution due", sla.resolutionDue)
@@ -166,13 +173,15 @@ kv("R-1 status", app.afterSales.get("R-1")!.status.rawValue)
 // MARK: Messaging
 section("Offline staff messaging (queued, masked, filtered)")
 let masked = try app.messaging.enqueue(id: "m1", from: "csr1", to: "agent2",
-                                       body: "Please call rider@mail.com at 555 222 3333")
+                                       body: "Please call rider@mail.com at 555 222 3333",
+                                       actingUser: csrUser)
 ok("Queued message after masking:")
 kv("body", masked.body)
 
 do {
     _ = try app.messaging.enqueue(id: "m2", from: "csr1", to: "agent2",
-                                  body: "SSN 111-22-3333")
+                                  body: "SSN 111-22-3333",
+                                  actingUser: csrUser)
 } catch let e as MessagingError {
     ok("Sensitive content blocked → \(e)")
 }
@@ -186,10 +195,11 @@ app.talent.importResume(Resume(id: "tm1", name: "Pat", skills: ["swift", "uikit"
                                yearsExperience: 6, certifications: ["railSafety"]))
 app.talent.importResume(Resume(id: "tm2", name: "Sam", skills: ["kotlin"],
                                yearsExperience: 2, certifications: []))
-let matches = app.talent.search(TalentSearchCriteria(
+let adminUser = User(id: "admin1", displayName: "Dan Admin", role: .administrator)
+let matches = try app.talent.search(TalentSearchCriteria(
     wantedSkills: ["swift", "uikit"], wantedCertifications: ["railSafety"],
     desiredYears: 5, filter: .or(.hasSkill("swift"), .hasCertification("railSafety"))
-))
+), by: adminUser)
 for m in matches {
     ok("\(m.resumeId) score=\(String(format: "%.2f", m.score))  [\(m.explanation)]")
 }

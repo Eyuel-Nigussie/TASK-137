@@ -75,7 +75,7 @@ final class CartTests: XCTestCase {
         try cart.add(skuId: "t2", quantity: 1)
         try cart.remove(skuId: "t1")
         XCTAssertEqual(cart.lines.count, 1)
-        cart.clear()
+        try cart.clear()
         XCTAssertTrue(cart.isEmpty)
     }
 

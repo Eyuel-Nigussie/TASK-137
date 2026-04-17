@@ -58,7 +58,7 @@ public final class InMemoryPersistenceStore: PersistenceStore {
 
 // MARK: - Realm implementation stub (compiled only when RealmSwift is available)
 
-#if canImport(RealmSwift)
+#if canImport(RealmSwift) && os(iOS)
 import RealmSwift
 
 /// Realm-backed persistence store with optional encryption key from the iOS Keychain.

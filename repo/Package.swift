@@ -11,20 +11,28 @@ let package = Package(
         .library(name: "RailCommerceApp", targets: ["RailCommerceApp"])
     ],
     dependencies: [
-        .package(url: "https://github.com/ReactiveX/RxSwift.git", .upToNextMinor(from: "6.6.0"))
+        .package(url: "https://github.com/ReactiveX/RxSwift.git", .upToNextMinor(from: "6.6.0")),
+        .package(url: "https://github.com/realm/realm-swift.git", .upToNextMajor(from: "10.45.0"))
     ],
     targets: [
         .target(
             name: "RailCommerce",
             dependencies: [
-                .product(name: "RxSwift", package: "RxSwift")
+                .product(name: "RxSwift", package: "RxSwift"),
+                .product(name: "RealmSwift", package: "realm-swift",
+                         condition: .when(platforms: [.iOS]))
             ],
             path: "Sources/RailCommerce"
         ),
         .target(
             name: "RailCommerceApp",
-            dependencies: ["RailCommerce"],
-            path: "Sources/RailCommerceApp"
+            dependencies: [
+                "RailCommerce",
+                .product(name: "RxSwift", package: "RxSwift"),
+                .product(name: "RealmSwift", package: "realm-swift")
+            ],
+            path: "Sources/RailCommerceApp",
+            exclude: ["Info.plist"]
         ),
         .executableTarget(
             name: "RailCommerceDemo",

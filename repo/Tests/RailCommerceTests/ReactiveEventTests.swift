@@ -5,6 +5,11 @@ import RxSwift
 /// Verifies that service `events` observables emit the correct `*Event` values.
 final class ReactiveEventTests: XCTestCase {
 
+    private let alice = User(id: "a", displayName: "A", role: .customer)
+    private let customer = User(id: "U1", displayName: "U", role: .customer)
+    private let csr = User(id: "csr", displayName: "CSR", role: .customerService)
+    private let holder = User(id: "H1", displayName: "H", role: .customer)
+
     // MARK: - MessagingService
 
     func testMessagingEnqueueEmitsEvent() throws {
@@ -13,14 +18,14 @@ final class ReactiveEventTests: XCTestCase {
         var received: [MessagingEvent] = []
         svc.events.subscribe(onNext: { received.append($0) }).disposed(by: bag)
 
-        _ = try svc.enqueue(id: "m1", from: "a", to: "b", body: "hello")
+        _ = try svc.enqueue(id: "m1", from: "a", to: "b", body: "hello", actingUser: alice)
         XCTAssertEqual(received, [.messageEnqueued("m1")])
     }
 
     func testMessagingDrainEmitsEvent() throws {
         let bag = DisposeBag()
         let svc = MessagingService(clock: FakeClock())
-        _ = try svc.enqueue(id: "m1", from: "a", to: "b", body: "hi")
+        _ = try svc.enqueue(id: "m1", from: "a", to: "b", body: "hi", actingUser: alice)
         var received: [MessagingEvent] = []
         svc.events.subscribe(onNext: { received.append($0) }).disposed(by: bag)
 
@@ -54,7 +59,8 @@ final class ReactiveEventTests: XCTestCase {
         svc.events.subscribe(onNext: { received.append($0) }).disposed(by: bag)
 
         _ = try svc.submit(orderId: "O1", userId: "U1", cart: cart, discounts: [],
-                           address: address, shipping: shipping, invoiceNotes: "")
+                           address: address, shipping: shipping, invoiceNotes: "",
+                           actingUser: customer)
         XCTAssertEqual(received, [.orderSubmitted("O1")])
     }
 
@@ -69,7 +75,8 @@ final class ReactiveEventTests: XCTestCase {
                                 city: "NYC", state: .NY, zip: "10001")
         let shipping = ShippingTemplate(id: "std", name: "Std", feeCents: 500, etaDays: 3)
         let snap = try svc.submit(orderId: "O2", userId: "U1", cart: cart, discounts: [],
-                                  address: address, shipping: shipping, invoiceNotes: "")
+                                  address: address, shipping: shipping, invoiceNotes: "",
+                                  actingUser: customer)
 
         var received: [CheckoutEvent] = []
         svc.events.subscribe(onNext: { received.append($0) }).disposed(by: bag)
@@ -92,7 +99,7 @@ final class ReactiveEventTests: XCTestCase {
                                     amountCents: 500)
         var received: [AfterSalesEvent] = []
         svc.events.subscribe(onNext: { received.append($0) }).disposed(by: bag)
-        _ = try svc.open(req)
+        _ = try svc.open(req, actingUser: customer)
         XCTAssertEqual(received, [.requestOpened("R1")])
     }
 
@@ -106,10 +113,10 @@ final class ReactiveEventTests: XCTestCase {
                                     reason: .changedMind,
                                     createdAt: clock.now(), serviceDate: clock.now(),
                                     amountCents: 500)
-        try svc.open(req)
+        try svc.open(req, actingUser: customer)
         var received: [AfterSalesEvent] = []
         svc.events.subscribe(onNext: { received.append($0) }).disposed(by: bag)
-        try svc.approve(id: "R1")
+        try svc.approve(id: "R1", actingUser: csr)
         XCTAssertEqual(received, [.requestResolved("R1", .approved)])
     }
 
@@ -123,10 +130,10 @@ final class ReactiveEventTests: XCTestCase {
                                     reason: .changedMind,
                                     createdAt: clock.now(), serviceDate: clock.now(),
                                     amountCents: 500)
-        try svc.open(req)
+        try svc.open(req, actingUser: customer)
         var received: [AfterSalesEvent] = []
         svc.events.subscribe(onNext: { received.append($0) }).disposed(by: bag)
-        try svc.reject(id: "R1")
+        try svc.reject(id: "R1", actingUser: csr)
         XCTAssertEqual(received, [.requestResolved("R1", .rejected)])
     }
 
@@ -140,7 +147,7 @@ final class ReactiveEventTests: XCTestCase {
         svc.registerSeat(key)
         var received: [SeatInventoryEvent] = []
         svc.events.subscribe(onNext: { received.append($0) }).disposed(by: bag)
-        _ = try svc.reserve(key, holderId: "H1")
+        _ = try svc.reserve(key, holderId: "H1", actingUser: holder)
         XCTAssertEqual(received, [.seatReserved("T1", "1A")])
     }
 
@@ -150,10 +157,10 @@ final class ReactiveEventTests: XCTestCase {
         let key = SeatKey(trainId: "T1", date: "2024-01-02", segmentId: "S1",
                           seatClass: .economy, seatNumber: "1A")
         svc.registerSeat(key)
-        _ = try svc.reserve(key, holderId: "H1")
+        _ = try svc.reserve(key, holderId: "H1", actingUser: holder)
         var received: [SeatInventoryEvent] = []
         svc.events.subscribe(onNext: { received.append($0) }).disposed(by: bag)
-        try svc.confirm(key, holderId: "H1")
+        try svc.confirm(key, holderId: "H1", actingUser: holder)
         XCTAssertEqual(received, [.seatConfirmed("T1", "1A")])
     }
 
@@ -163,10 +170,10 @@ final class ReactiveEventTests: XCTestCase {
         let key = SeatKey(trainId: "T1", date: "2024-01-02", segmentId: "S1",
                           seatClass: .economy, seatNumber: "1A")
         svc.registerSeat(key)
-        _ = try svc.reserve(key, holderId: "H1")
+        _ = try svc.reserve(key, holderId: "H1", actingUser: holder)
         var received: [SeatInventoryEvent] = []
         svc.events.subscribe(onNext: { received.append($0) }).disposed(by: bag)
-        try svc.release(key, holderId: "H1")
+        try svc.release(key, holderId: "H1", actingUser: holder)
         XCTAssertEqual(received, [.seatReleased("T1", "1A")])
     }
 

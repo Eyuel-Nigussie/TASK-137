@@ -26,9 +26,13 @@ final class MainTabBarController: UITabBarController {
     private func buildTabs() -> [UIViewController] {
         var tabs: [UIViewController] = []
 
-        // Browse is available to all roles.
+        // Browse (catalog) is available to all roles.
         tabs.append(nav(BrowseViewController(app: app, user: currentUser),
                         title: "Browse", image: "list.bullet"))
+
+        // Published content (advisories/offers) browsable by taxonomy — all roles.
+        tabs.append(nav(ContentBrowseViewController(app: app, user: currentUser),
+                        title: "Advisories", image: "newspaper"))
 
         if RolePolicy.can(currentUser.role, .purchase) {
             tabs.append(nav(CartViewController(app: app, user: currentUser),
@@ -44,16 +48,24 @@ final class MainTabBarController: UITabBarController {
                             title: "Inventory", image: "tram.fill"))
         }
 
-        if RolePolicy.can(currentUser.role, .draftContent) {
+        // Editors draft content; reviewers approve/reject it — both need the tab.
+        if RolePolicy.can(currentUser.role, .draftContent) ||
+           RolePolicy.can(currentUser.role, .publishContent) {
             tabs.append(nav(ContentPublishingViewController(app: app, user: currentUser),
                             title: "Content", image: "doc.text"))
         }
 
-        if RolePolicy.can(currentUser.role, .matchTalent) ||
-           RolePolicy.can(currentUser.role, .handleServiceTickets) {
+        // Only roles with explicit matchTalent permission (admin) access talent search.
+        // CSR uses handleServiceTickets — not matchTalent — so they would hit a permission
+        // error; the tab is hidden for them.
+        if RolePolicy.can(currentUser.role, .matchTalent) {
             tabs.append(nav(TalentMatchingViewController(app: app, user: currentUser),
                             title: "Talent", image: "person.3"))
         }
+
+        // Membership marketing — available to all (customers enroll, admins manage).
+        tabs.append(nav(MembershipViewController(app: app, user: currentUser),
+                        title: "Membership", image: "star.circle"))
 
         // Messaging available to all.
         tabs.append(nav(MessagingViewController(app: app, user: currentUser),

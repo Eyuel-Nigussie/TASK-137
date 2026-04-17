@@ -19,6 +19,14 @@
 		AA000023 /* SeatInventoryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000022 /* SeatInventoryViewController.swift */; };
 		AA000025 /* TalentMatchingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000024 /* TalentMatchingViewController.swift */; };
 		AA000033 /* RailCommerce in Frameworks */ = {isa = PBXBuildFile; productRef = AA000031 /* RailCommerce */; };
+		AA000051 /* AppShellFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000050 /* AppShellFactory.swift */; };
+		AA000053 /* MainSplitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000052 /* MainSplitViewController.swift */; };
+		AA000055 /* MultipeerMessageTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000054 /* MultipeerMessageTransport.swift */; };
+		AA000057 /* SystemKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000056 /* SystemKeychain.swift */; };
+		AA000059 /* SystemProviders.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000058 /* SystemProviders.swift */; };
+		AA00005B /* MembershipViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00005A /* MembershipViewController.swift */; };
+		AA00005D /* ContentBrowseViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00005C /* ContentBrowseViewController.swift */; };
+		AA00005F /* AfterSalesCaseThreadViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00005E /* AfterSalesCaseThreadViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +42,14 @@
 		AA000020 /* MessagingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingViewController.swift; sourceTree = "<group>"; };
 		AA000022 /* SeatInventoryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeatInventoryViewController.swift; sourceTree = "<group>"; };
 		AA000024 /* TalentMatchingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalentMatchingViewController.swift; sourceTree = "<group>"; };
+		AA000050 /* AppShellFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellFactory.swift; sourceTree = "<group>"; };
+		AA000052 /* MainSplitViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSplitViewController.swift; sourceTree = "<group>"; };
+		AA000054 /* MultipeerMessageTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipeerMessageTransport.swift; sourceTree = "<group>"; };
+		AA000056 /* SystemKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemKeychain.swift; sourceTree = "<group>"; };
+		AA000058 /* SystemProviders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemProviders.swift; sourceTree = "<group>"; };
+		AA00005A /* MembershipViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MembershipViewController.swift; sourceTree = "<group>"; };
+		AA00005C /* ContentBrowseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentBrowseViewController.swift; sourceTree = "<group>"; };
+		AA00005E /* AfterSalesCaseThreadViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AfterSalesCaseThreadViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,8 +93,13 @@
 			isa = PBXGroup;
 			children = (
 				AA000010 /* AppDelegate.swift */,
+				AA000050 /* AppShellFactory.swift */,
 				AA000012 /* LoginViewController.swift */,
+				AA000052 /* MainSplitViewController.swift */,
 				AA000014 /* MainTabBarController.swift */,
+				AA000054 /* MultipeerMessageTransport.swift */,
+				AA000056 /* SystemKeychain.swift */,
+				AA000058 /* SystemProviders.swift */,
 				AA000027 /* Views */,
 			);
 			path = RailCommerceApp;
@@ -87,11 +108,14 @@
 		AA000027 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				AA00005E /* AfterSalesCaseThreadViewController.swift */,
 				AA000016 /* AfterSalesViewController.swift */,
 				AA000018 /* BrowseViewController.swift */,
 				AA00001A /* CartViewController.swift */,
 				AA00001C /* CheckoutViewController.swift */,
+				AA00005C /* ContentBrowseViewController.swift */,
 				AA00001E /* ContentPublishingViewController.swift */,
+				AA00005A /* MembershipViewController.swift */,
 				AA000020 /* MessagingViewController.swift */,
 				AA000022 /* SeatInventoryViewController.swift */,
 				AA000024 /* TalentMatchingViewController.swift */,
@@ -174,13 +198,21 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA000011 /* AppDelegate.swift in Sources */,
+				AA000051 /* AppShellFactory.swift in Sources */,
 				AA000013 /* LoginViewController.swift in Sources */,
+				AA000053 /* MainSplitViewController.swift in Sources */,
 				AA000015 /* MainTabBarController.swift in Sources */,
+				AA000055 /* MultipeerMessageTransport.swift in Sources */,
+				AA000057 /* SystemKeychain.swift in Sources */,
+				AA000059 /* SystemProviders.swift in Sources */,
+				AA00005F /* AfterSalesCaseThreadViewController.swift in Sources */,
 				AA000017 /* AfterSalesViewController.swift in Sources */,
 				AA000019 /* BrowseViewController.swift in Sources */,
 				AA00001B /* CartViewController.swift in Sources */,
 				AA00001D /* CheckoutViewController.swift in Sources */,
+				AA00005D /* ContentBrowseViewController.swift in Sources */,
 				AA00001F /* ContentPublishingViewController.swift in Sources */,
+				AA00005B /* MembershipViewController.swift in Sources */,
 				AA000021 /* MessagingViewController.swift in Sources */,
 				AA000023 /* SeatInventoryViewController.swift in Sources */,
 				AA000025 /* TalentMatchingViewController.swift in Sources */,
@@ -208,7 +240,7 @@
 					"$(inherited)",
 				);
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -230,7 +262,7 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -245,7 +277,9 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Sources/RailCommerceApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RailCommerce;
+				INFOPLIST_KEY_NSCameraUsageDescription = "RailCommerce needs camera access to capture photo proof for return and exchange requests.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -268,7 +302,9 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Sources/RailCommerceApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RailCommerce;
+				INFOPLIST_KEY_NSCameraUsageDescription = "RailCommerce needs camera access to capture photo proof for return and exchange requests.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

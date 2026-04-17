@@ -72,24 +72,51 @@ public struct SavedSearch: Codable, Equatable, Sendable {
     public let desiredYears: Int
 }
 
+public enum TalentError: Error, Equatable {
+    case persistenceFailed
+}
+
 public final class TalentMatchingService {
     public static let skillWeight = 0.5
     public static let experienceWeight = 0.3
     public static let certificationWeight = 0.2
+    public static let resumePrefix = "talent.resume."
+    public static let savedSearchPrefix = "talent.saved."
 
+    private let persistence: PersistenceStore?
+    private let logger: Logger
     private var resumes: [String: Resume] = [:]
     private var skillIndex: [String: Set<String>] = [:]
     private var certIndex: [String: Set<String>] = [:]
     private var tagIndex: [String: Set<String>] = [:]
     private var savedSearches: [String: SavedSearch] = [:]
 
-    public init() {}
+    public init(persistence: PersistenceStore? = nil, logger: Logger = SilentLogger()) {
+        self.persistence = persistence
+        self.logger = logger
+        hydrate()
+    }
 
+    /// Imports a resume. Non-throwing for bulk/tooling ergonomics, but rolls
+    /// back the in-memory index on durability failure and logs the incident
+    /// so the next import retry is not silently lost.
     public func importResume(_ r: Resume) {
+        let prior = resumes[r.id]
         resumes[r.id] = r
         for s in r.skills { skillIndex[s, default: []].insert(r.id) }
         for c in r.certifications { certIndex[c, default: []].insert(r.id) }
         for t in r.tags { tagIndex[t, default: []].insert(r.id) }
+        do {
+            try persistResume(r)
+        } catch {
+            // Rebuild indices around the prior record (or drop them entirely
+            // if this was a first-time import that never durably persisted).
+            resumes[r.id] = prior
+            rebuildIndicesAfterRollback(id: r.id, restored: prior)
+            logger.error(.content, "importResume persist failed id=\(r.id) err=\(error)")
+            return
+        }
+        logger.info(.content, "importResume id=\(r.id)")
     }
 
     public func allResumes() -> [Resume] { resumes.values.sorted { $0.id < $1.id } }
@@ -97,20 +124,62 @@ public final class TalentMatchingService {
     public func bulkTag(ids: [String], add tag: String) {
         for id in ids {
             guard var r = resumes[id] else { continue }
+            let prior = resumes[id]
+            let hadTag = r.tags.contains(tag)
             r.tags.insert(tag)
             resumes[id] = r
             tagIndex[tag, default: []].insert(id)
+            do {
+                try persistResume(r)
+            } catch {
+                resumes[id] = prior
+                if !hadTag { tagIndex[tag]?.remove(id) }
+                logger.error(.content, "bulkTag persist failed id=\(id) err=\(error)")
+            }
         }
     }
 
-    public func saveSearch(_ s: SavedSearch) { savedSearches[s.id] = s }
+    public func saveSearch(_ s: SavedSearch) {
+        let prior = savedSearches[s.id]
+        savedSearches[s.id] = s
+        do {
+            try persistSavedSearch(s)
+        } catch {
+            if let prior { savedSearches[s.id] = prior }
+            else { savedSearches.removeValue(forKey: s.id) }
+            logger.error(.content, "saveSearch persist failed id=\(s.id) err=\(error)")
+        }
+    }
+
+    /// Rebuilds skill/cert/tag indices so they reflect only the resumes
+    /// currently in the in-memory store. Used after a persistence rollback
+    /// evicts a new-import entry that never made it to disk.
+    private func rebuildIndicesAfterRollback(id: String, restored: Resume?) {
+        skillIndex = skillIndex.mapValues { $0.filter { $0 != id } }
+        certIndex = certIndex.mapValues { $0.filter { $0 != id } }
+        tagIndex = tagIndex.mapValues { $0.filter { $0 != id } }
+        if let r = restored {
+            for s in r.skills { skillIndex[s, default: []].insert(r.id) }
+            for c in r.certifications { certIndex[c, default: []].insert(r.id) }
+            for t in r.tags { tagIndex[t, default: []].insert(r.id) }
+        }
+    }
     public func savedSearch(_ id: String) -> SavedSearch? { savedSearches[id] }
     public func listSavedSearches() -> [SavedSearch] {
         savedSearches.values.sorted { $0.id < $1.id }
     }
 
-    /// Searches resumes with no role check. Public for backward-compatibility.
-    public func search(_ criteria: TalentSearchCriteria) -> [TalentMatch] {
+    /// Role-enforced search: requires the caller to hold `.matchTalent`.
+    /// This is the only public search entry point; callers must pass an authenticated
+    /// `User` whose role grants `.matchTalent`.
+    public func search(_ criteria: TalentSearchCriteria, by user: User) throws -> [TalentMatch] {
+        try RolePolicy.enforce(user: user, .matchTalent)
+        return searchUnchecked(criteria)
+    }
+
+    /// Unchecked search for internal use only (tests and guarded callers).
+    /// Intentionally `internal` so external callers cannot bypass role enforcement.
+    internal func searchUnchecked(_ criteria: TalentSearchCriteria) -> [TalentMatch] {
         var candidates: [Resume] = Array(resumes.values)
         if let f = criteria.filter {
             candidates = candidates.filter { f.evaluate($0) }
@@ -126,12 +195,6 @@ public final class TalentMatchingService {
                 if a.score != b.score { return a.score > b.score }
                 return a.resumeId < b.resumeId
             }
-    }
-
-    /// Role-enforced search: requires the caller to hold `.matchTalent`.
-    public func search(_ criteria: TalentSearchCriteria, by user: User) throws -> [TalentMatch] {
-        try RolePolicy.enforce(user: user, .matchTalent)
-        return search(criteria)
     }
 
     private func score(_ r: Resume, criteria: TalentSearchCriteria) -> TalentMatch {
@@ -170,5 +233,51 @@ public final class TalentMatchingService {
             matchedCertifications: matchedCerts,
             explanation: explanation
         )
+    }
+
+    // MARK: - Persistence
+
+    private func persistResume(_ r: Resume) throws {
+        guard let persistence else { return }
+        do {
+            let data = try JSONEncoder().encode(r)
+            try persistence.save(key: Self.resumePrefix + r.id, data: data)
+        } catch {
+            logger.error(.persistence, "talent persist resume failed id=\(r.id)")
+            throw TalentError.persistenceFailed
+        }
+    }
+
+    private func persistSavedSearch(_ s: SavedSearch) throws {
+        guard let persistence else { return }
+        do {
+            let data = try JSONEncoder().encode(s)
+            try persistence.save(key: Self.savedSearchPrefix + s.id, data: data)
+        } catch {
+            logger.error(.persistence, "talent persist search failed id=\(s.id)")
+            throw TalentError.persistenceFailed
+        }
+    }
+
+    private func hydrate() {
+        guard let persistence else { return }
+        let decoder = JSONDecoder()
+        do {
+            for entry in try persistence.loadAll(prefix: Self.resumePrefix) {
+                if let r = try? decoder.decode(Resume.self, from: entry.data) {
+                    resumes[r.id] = r
+                    for s in r.skills { skillIndex[s, default: []].insert(r.id) }
+                    for c in r.certifications { certIndex[c, default: []].insert(r.id) }
+                    for t in r.tags { tagIndex[t, default: []].insert(r.id) }
+                }
+            }
+            for entry in try persistence.loadAll(prefix: Self.savedSearchPrefix) {
+                if let s = try? decoder.decode(SavedSearch.self, from: entry.data) {
+                    savedSearches[s.id] = s
+                }
+            }
+        } catch {
+            logger.error(.persistence, "talent hydrate failed err=\(error)")
+        }
     }
 }

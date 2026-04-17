@@ -2,6 +2,11 @@ import XCTest
 @testable import RailCommerce
 
 final class MessagingServiceTests: XCTestCase {
+    // CSR is used so the identity-binding relaxation (`.sendStaffMessage`) applies.
+    // Customer-as-sender tests that exercise identity binding use `aliceUser` (id matches `from`).
+    private let testUser = User(id: "u1", displayName: "CSR", role: .customerService)
+    private let aliceUser = User(id: "alice", displayName: "Alice", role: .customer)
+
     private func setup() -> (MessagingService, FakeClock) {
         let clock = FakeClock()
         return (MessagingService(clock: clock), clock)
@@ -9,7 +14,7 @@ final class MessagingServiceTests: XCTestCase {
 
     func testEnqueueQueuesAndDrains() throws {
         let (svc, clock) = setup()
-        _ = try svc.enqueue(id: "m1", from: "a", to: "b", body: "hello")
+        _ = try svc.enqueue(id: "m1", from: "a", to: "b", body: "hello", actingUser: testUser)
         XCTAssertEqual(svc.queue.count, 1)
         clock.advance(by: 10)
         let delivered = svc.drainQueue()
@@ -20,19 +25,22 @@ final class MessagingServiceTests: XCTestCase {
 
     func testBlockingPreventsDelivery() throws {
         let (svc, _) = setup()
-        svc.block(from: "a", to: "b")
-        XCTAssertThrowsError(try svc.enqueue(id: "m1", from: "a", to: "b", body: "hi")) { err in
+        // testUser is the CSR, whose `.sendStaffMessage` permission allows
+        // blocking on behalf of any recipient.
+        try svc.block(from: "a", to: "b", actingUser: testUser)
+        XCTAssertThrowsError(try svc.enqueue(id: "m1", from: "a", to: "b", body: "hi", actingUser: testUser)) { err in
             XCTAssertEqual(err as? MessagingError, .blockedByRecipient)
         }
-        svc.unblock(from: "a", to: "b")
-        _ = try svc.enqueue(id: "m2", from: "a", to: "b", body: "hi again")
+        try svc.unblock(from: "a", to: "b", actingUser: testUser)
+        _ = try svc.enqueue(id: "m2", from: "a", to: "b", body: "hi again", actingUser: testUser)
         XCTAssertEqual(svc.queue.count, 1)
     }
 
     func testSSNBlocked() {
         let (svc, _) = setup()
         XCTAssertThrowsError(try svc.enqueue(id: "x", from: "a", to: "b",
-                                             body: "my ssn is 123-45-6789")) { err in
+                                             body: "my ssn is 123-45-6789",
+                                             actingUser: testUser)) { err in
             if case .sensitiveDataBlocked(let kind) = err as? MessagingError {
                 XCTAssertEqual(kind, .ssn)
             } else { XCTFail("wrong error") }
@@ -42,7 +50,8 @@ final class MessagingServiceTests: XCTestCase {
     func testPaymentCardBlocked() {
         let (svc, _) = setup()
         XCTAssertThrowsError(try svc.enqueue(id: "x", from: "a", to: "b",
-                                             body: "card 4111 1111 1111 1111")) { err in
+                                             body: "card 4111 1111 1111 1111",
+                                             actingUser: testUser)) { err in
             if case .sensitiveDataBlocked(let kind) = err as? MessagingError {
                 XCTAssertEqual(kind, .paymentCard)
             } else { XCTFail("wrong error") }
@@ -53,7 +62,7 @@ final class MessagingServiceTests: XCTestCase {
         let (svc, _) = setup()
         for _ in 0..<3 {
             XCTAssertThrowsError(try svc.enqueue(id: UUID().uuidString, from: "a", to: "b",
-                                                 body: "you idiot"))
+                                                 body: "you idiot", actingUser: testUser))
         }
         XCTAssertEqual(svc.strikes(for: "a"), 3)
         XCTAssertTrue(svc.isBlocked(from: "a", to: "b"))
@@ -63,7 +72,8 @@ final class MessagingServiceTests: XCTestCase {
         let (svc, _) = setup()
         let att = MessageAttachment(id: "x", kind: .jpeg, sizeBytes: 20 * 1024 * 1024)
         XCTAssertThrowsError(try svc.enqueue(id: "m", from: "a", to: "b",
-                                             body: "hi", attachments: [att])) { err in
+                                             body: "hi", attachments: [att],
+                                             actingUser: testUser)) { err in
             XCTAssertEqual(err as? MessagingError, .attachmentTooLarge)
         }
     }
@@ -72,14 +82,16 @@ final class MessagingServiceTests: XCTestCase {
         let (svc, _) = setup()
         for k in [AttachmentKind.jpeg, .png, .pdf] {
             _ = try svc.enqueue(id: UUID().uuidString, from: "a", to: "b", body: "ok",
-                                attachments: [MessageAttachment(id: "id", kind: k, sizeBytes: 1_000)])
+                                attachments: [MessageAttachment(id: "id", kind: k, sizeBytes: 1_000)],
+                                actingUser: testUser)
         }
     }
 
     func testContactMaskingApplied() throws {
         let (svc, _) = setup()
         let m = try svc.enqueue(id: "m", from: "a", to: "b",
-                                body: "email me at alice@example.com or call 555-123-4567")
+                                body: "email me at alice@example.com or call 555-123-4567",
+                                actingUser: testUser)
         XCTAssertTrue(m.body.contains("****@****"))
         // Last 4 digits of 555-123-4567 are preserved: ***-***-4567
         XCTAssertTrue(m.body.contains("***-***-4567"))
@@ -134,8 +146,8 @@ final class MessagingServiceTests: XCTestCase {
 
     func testMessagesFromUserIsolated() throws {
         let (svc, _) = setup()
-        _ = try svc.enqueue(id: "m1", from: "alice", to: "bob", body: "hi bob")
-        _ = try svc.enqueue(id: "m2", from: "bob", to: "alice", body: "hey alice")
+        _ = try svc.enqueue(id: "m1", from: "alice", to: "bob", body: "hi bob", actingUser: testUser)
+        _ = try svc.enqueue(id: "m2", from: "bob", to: "alice", body: "hey alice", actingUser: testUser)
         _ = svc.drainQueue()
         XCTAssertEqual(svc.messages(from: "alice").map { $0.id }, ["m1"])
         XCTAssertEqual(svc.messages(from: "bob").map { $0.id }, ["m2"])
@@ -144,8 +156,8 @@ final class MessagingServiceTests: XCTestCase {
 
     func testMessagesToUserIsolated() throws {
         let (svc, _) = setup()
-        _ = try svc.enqueue(id: "m1", from: "alice", to: "bob", body: "hi")
-        _ = try svc.enqueue(id: "m2", from: "carol", to: "bob", body: "hello")
+        _ = try svc.enqueue(id: "m1", from: "alice", to: "bob", body: "hi", actingUser: testUser)
+        _ = try svc.enqueue(id: "m2", from: "carol", to: "bob", body: "hello", actingUser: testUser)
         _ = svc.drainQueue()
         XCTAssertEqual(svc.messages(to: "bob").count, 2)
         XCTAssertTrue(svc.messages(to: "alice").isEmpty)

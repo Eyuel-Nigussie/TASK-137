@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.railcommerce.content.publish</string>
+		<string>com.railcommerce.attachments.cleanup</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>RailCommerce needs camera access to capture photo proof for return, refund, and exchange requests.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>RailCommerce uses the local network to discover nearby staff devices for offline peer-to-peer messaging and coordination.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_railcommerce._tcp</string>
+		<string>_railcommerce._udp</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
+	</array>
+</dict>
+</plist>

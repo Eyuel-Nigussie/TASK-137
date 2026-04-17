@@ -2,6 +2,8 @@ import XCTest
 @testable import RailCommerce
 
 final class CheckoutServiceTests: XCTestCase {
+    private let customer = User(id: "c1", displayName: "Test Customer", role: .customer)
+
     private func setup() -> (CheckoutService, Cart, USAddress, ShippingTemplate, FakeClock, InMemoryKeychain) {
         let clock = FakeClock()
         let keychain = InMemoryKeychain()
@@ -19,9 +21,10 @@ final class CheckoutServiceTests: XCTestCase {
 
     func testSuccessfulSubmission() throws {
         let (service, cart, address, shipping, _, keychain) = setup()
-        let snap = try service.submit(orderId: "O1", userId: "U1", cart: cart,
+        let snap = try service.submit(orderId: "O1", userId: "c1", cart: cart,
                                       discounts: [], address: address,
-                                      shipping: shipping, invoiceNotes: "please expedite")
+                                      shipping: shipping, invoiceNotes: "please expedite",
+                                      actingUser: customer)
         XCTAssertEqual(snap.totalCents, 2_000 + 500)
         XCTAssertNotNil(service.order("O1"))
         XCTAssertNotNil(service.storedHash(for: "O1"))
@@ -31,56 +34,60 @@ final class CheckoutServiceTests: XCTestCase {
     func testFreeShippingDiscountRemovesShippingFee() throws {
         let (service, cart, address, shipping, _, _) = setup()
         let d = Discount(code: "SHIP", kind: .freeShipping, magnitude: 0, priority: 1)
-        let snap = try service.submit(orderId: "O2", userId: "U1", cart: cart,
+        let snap = try service.submit(orderId: "O2", userId: "c1", cart: cart,
                                       discounts: [d], address: address,
-                                      shipping: shipping, invoiceNotes: "")
+                                      shipping: shipping, invoiceNotes: "",
+                                      actingUser: customer)
         XCTAssertEqual(snap.totalCents, 2_000)
     }
 
     func testDuplicateLockoutWithin10Seconds() throws {
         let (service, cart, address, shipping, clock, _) = setup()
-        _ = try service.submit(orderId: "O3", userId: "U", cart: cart,
+        _ = try service.submit(orderId: "O3", userId: "c1", cart: cart,
                                discounts: [], address: address,
-                               shipping: shipping, invoiceNotes: "")
+                               shipping: shipping, invoiceNotes: "", actingUser: customer)
         clock.advance(by: 5)
-        XCTAssertThrowsError(try service.submit(orderId: "O3", userId: "U", cart: cart,
+        XCTAssertThrowsError(try service.submit(orderId: "O3", userId: "c1", cart: cart,
                                                 discounts: [], address: address,
-                                                shipping: shipping, invoiceNotes: "")) { err in
+                                                shipping: shipping, invoiceNotes: "",
+                                                actingUser: customer)) { err in
             XCTAssertEqual(err as? CheckoutError, .duplicateSubmission)
         }
     }
 
     func testDuplicateAllowedAfter10Seconds() throws {
         let (service, cart, address, shipping, clock, _) = setup()
-        _ = try service.submit(orderId: "O4", userId: "U", cart: cart,
+        _ = try service.submit(orderId: "O4", userId: "c1", cart: cart,
                                discounts: [], address: address,
-                               shipping: shipping, invoiceNotes: "")
+                               shipping: shipping, invoiceNotes: "", actingUser: customer)
         clock.advance(by: 11)
         // Because Keychain is sealed for the first order, second attempt should now be
         // read-only. We route via a fresh keychain to show lockout expires.
         let fresh = InMemoryKeychain()
         let fresh2 = CheckoutService(clock: clock, keychain: fresh)
-        _ = try fresh2.submit(orderId: "O4", userId: "U", cart: cart,
+        _ = try fresh2.submit(orderId: "O4", userId: "c1", cart: cart,
                               discounts: [], address: address,
-                              shipping: shipping, invoiceNotes: "")
+                              shipping: shipping, invoiceNotes: "", actingUser: customer)
         XCTAssertNotNil(fresh2.order("O4"))
     }
 
     func testEmptyCartRejected() {
         let (service, _, address, shipping, _, _) = setup()
         let emptyCart = Cart(catalog: Catalog())
-        XCTAssertThrowsError(try service.submit(orderId: "O5", userId: "U", cart: emptyCart,
+        XCTAssertThrowsError(try service.submit(orderId: "O5", userId: "c1", cart: emptyCart,
                                                 discounts: [], address: address,
-                                                shipping: shipping, invoiceNotes: "")) { err in
+                                                shipping: shipping, invoiceNotes: "",
+                                                actingUser: customer)) { err in
             XCTAssertEqual(err as? CheckoutError, .emptyCart)
         }
     }
 
     func testMissingShippingRejected() {
         let (service, cart, address, _, _, _) = setup()
-        XCTAssertThrowsError(try service.submit(orderId: "O6", userId: "U", cart: cart,
+        XCTAssertThrowsError(try service.submit(orderId: "O6", userId: "c1", cart: cart,
                                                 discounts: [], address: address,
-                                                shipping: nil, invoiceNotes: "")) { err in
+                                                shipping: nil, invoiceNotes: "",
+                                                actingUser: customer)) { err in
             XCTAssertEqual(err as? CheckoutError, .noShipping)
         }
     }
@@ -88,9 +95,10 @@ final class CheckoutServiceTests: XCTestCase {
     func testInvalidAddressRejected() {
         let (service, cart, _, shipping, _, _) = setup()
         let bad = USAddress(id: "x", recipient: "a", line1: "x", city: "x", state: .NY, zip: "bad")
-        XCTAssertThrowsError(try service.submit(orderId: "O7", userId: "U", cart: cart,
+        XCTAssertThrowsError(try service.submit(orderId: "O7", userId: "c1", cart: cart,
                                                 discounts: [], address: bad,
-                                                shipping: shipping, invoiceNotes: "")) { err in
+                                                shipping: shipping, invoiceNotes: "",
+                                                actingUser: customer)) { err in
             if case .addressInvalid(let inner) = err as? CheckoutError {
                 XCTAssertEqual(inner, .invalidZip)
             } else { XCTFail("expected addressInvalid") }
@@ -99,9 +107,10 @@ final class CheckoutServiceTests: XCTestCase {
 
     func testVerifyDetectsTampering() throws {
         let (service, cart, address, shipping, _, _) = setup()
-        let snap = try service.submit(orderId: "O8", userId: "U", cart: cart,
+        let snap = try service.submit(orderId: "O8", userId: "c1", cart: cart,
                                       discounts: [], address: address,
-                                      shipping: shipping, invoiceNotes: "")
+                                      shipping: shipping, invoiceNotes: "",
+                                      actingUser: customer)
         var tampered = snap
         tampered = OrderSnapshot(orderId: snap.orderId, userId: snap.userId, lines: snap.lines,
                                  promotion: snap.promotion, address: snap.address,
@@ -120,7 +129,7 @@ final class CheckoutServiceTests: XCTestCase {
 
     func testCanonicalFieldsAreStableForSnapshot() {
         let snap = OrderSnapshot(
-            orderId: "Z", userId: "U",
+            orderId: "Z", userId: "c1",
             lines: [CartLine(sku: SKU(id: "a", kind: .ticket, title: "a", priceCents: 1), quantity: 1)],
             promotion: PromotionResultSnapshot(from: PromotionResult(
                 acceptedCodes: [], rejectedCodes: [],
@@ -153,19 +162,23 @@ final class CheckoutServiceTests: XCTestCase {
                                 city: "NYC", state: .NY, zip: "10001", isDefault: true)
         let shipping = ShippingTemplate(id: "std", name: "Standard", feeCents: 500, etaDays: 3)
 
+        // Sales agent has .processTransaction: can submit on behalf of any userId.
+        let agent = User(id: "agent", displayName: "Agent", role: .salesAgent)
         // Two orders for alice; one for bob — exercises filter and sort (2 alice orders).
         for orderId in ["OA2", "OA1"] {
             let cart = Cart(catalog: catalog)
             try cart.add(skuId: "t1", quantity: 1)
             clock.advance(by: 15)   // ensure clock advances so lockout doesn't trigger
             _ = try svc.submit(orderId: orderId, userId: "user-alice", cart: cart,
-                               discounts: [], address: address, shipping: shipping, invoiceNotes: "")
+                               discounts: [], address: address, shipping: shipping,
+                               invoiceNotes: "", actingUser: agent)
         }
         let cart3 = Cart(catalog: catalog)
         try cart3.add(skuId: "t1", quantity: 1)
         clock.advance(by: 15)
         _ = try svc.submit(orderId: "OB", userId: "user-bob", cart: cart3,
-                           discounts: [], address: address, shipping: shipping, invoiceNotes: "")
+                           discounts: [], address: address, shipping: shipping,
+                           invoiceNotes: "", actingUser: agent)
 
         // Alice has 2 orders sorted by ID: OA1, OA2
         let aliceOrders = svc.orders(for: "user-alice")

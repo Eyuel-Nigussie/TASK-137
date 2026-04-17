@@ -23,6 +23,7 @@ public enum Permission: String, CaseIterable, Codable, Sendable {
     case configureSystem
     case manageUsers
     case matchTalent
+    case manageMembership
 }
 
 public enum RolePolicy {
@@ -53,3 +54,8 @@ public struct User: Codable, Equatable, Sendable {
         self.role = role
     }
 }
+
+/// Alias for `User` that does NOT collide with `RealmSwift.User` when a caller
+/// imports both this module and RealmSwift (typical in the iOS app target).
+/// Always prefer `RCUser` in files that import `RealmSwift`.
+public typealias RCUser = User

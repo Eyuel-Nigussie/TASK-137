@@ -36,3 +36,6 @@ xcuserdata/
 .vscode/
 *.swp
 *~
+
+# ── Internal audit scratch ──────────────────────────────────────────────────
+.tmp/

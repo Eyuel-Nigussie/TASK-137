@@ -49,31 +49,110 @@ final class ContentPublishingViewController: UITableViewController {
         return cell
     }
 
-    // MARK: - Reviewer swipe-actions
+    // MARK: - Row tap → state-aware action sheet
 
-    override func tableView(
-        _ tableView: UITableView,
-        trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
-    ) -> UISwipeActionsConfiguration? {
-        guard RolePolicy.can(user.role, .publishContent) else { return nil }
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
         let item = app.publishing.items(publishedOnly: false)[indexPath.row]
-        guard item.status == .inReview else { return nil }
+        presentActionsSheet(for: item)
+    }
 
-        let approve = UIContextualAction(style: .normal, title: "Approve") { [weak self] _, _, done in
-            guard let self else { return done(false) }
-            try? self.app.publishing.approve(id: item.id, reviewer: self.user)
-            tableView.reloadData()
-            done(true)
-        }
-        approve.backgroundColor = .systemGreen
+    /// Offers the actions valid for the item's current state and the user's role.
+    /// - Editor (`.draftContent`) on `.draft` / `.rejected`: submit for review.
+    /// - Reviewer (`.publishContent`) on `.inReview`: approve / reject / schedule.
+    /// - Editor or reviewer on `.published` / `.scheduled`: rollback (if history).
+    private func presentActionsSheet(for item: ContentItem) {
+        let sheet = UIAlertController(title: item.title,
+                                      message: "Status: \(item.status.rawValue.capitalized)",
+                                      preferredStyle: .actionSheet)
 
-        let reject = UIContextualAction(style: .destructive, title: "Reject") { [weak self] _, _, done in
-            guard let self else { return done(false) }
-            try? self.app.publishing.reject(id: item.id, reviewer: self.user)
-            tableView.reloadData()
-            done(true)
+        let canDraft = RolePolicy.can(user.role, .draftContent)
+        let canPublish = RolePolicy.can(user.role, .publishContent)
+
+        // Submit-for-review (editor only, on draft/rejected)
+        if canDraft && (item.status == .draft || item.status == .rejected) {
+            sheet.addAction(UIAlertAction(title: "Submit for Review", style: .default) { [weak self] _ in
+                self?.trySubmitForReview(item)
+            })
         }
-        return UISwipeActionsConfiguration(actions: [approve, reject])
+        // Approve / Reject / Schedule (reviewer, on inReview)
+        if canPublish && item.status == .inReview {
+            sheet.addAction(UIAlertAction(title: "Approve & Publish", style: .default) { [weak self] _ in
+                self?.tryAction { try self?.app.publishing.approve(id: item.id, reviewer: self!.user) }
+            })
+            sheet.addAction(UIAlertAction(title: "Reject", style: .destructive) { [weak self] _ in
+                self?.tryAction { try self?.app.publishing.reject(id: item.id, reviewer: self!.user) }
+            })
+            sheet.addAction(UIAlertAction(title: "Schedule Publish...", style: .default) { [weak self] _ in
+                self?.presentSchedulePicker(for: item)
+            })
+        }
+        // Rollback (reviewer/editor, on published/scheduled/rolledBack with history)
+        if (canDraft || canPublish) && item.versions.count >= 2 {
+            sheet.addAction(UIAlertAction(title: "Rollback to Previous Version", style: .destructive) { [weak self] _ in
+                self?.tryAction { try self?.app.publishing.rollback(id: item.id, actingUser: self!.user) }
+            })
+        }
+
+        sheet.addAction(UIAlertAction(title: "Close", style: .cancel))
+        if sheet.actions.count == 1 {
+            // Only "Close" available — nothing to do for this user/state combo.
+            return
+        }
+        present(sheet, animated: true)
+    }
+
+    private func trySubmitForReview(_ item: ContentItem) {
+        tryAction { try self.app.publishing.submitForReview(id: item.id, actingUser: self.user) }
+    }
+
+    /// Presents a picker offering a few preset publish-time offsets and submits
+    /// a schedule request via `ContentPublishingService.schedule`.
+    private func presentSchedulePicker(for item: ContentItem) {
+        let sheet = UIAlertController(title: "Schedule Publish",
+                                      message: "When should this item go live?",
+                                      preferredStyle: .actionSheet)
+        let choices: [(String, TimeInterval)] = [
+            ("In 1 hour", 60 * 60),
+            ("In 4 hours", 4 * 60 * 60),
+            ("Tomorrow morning", 18 * 60 * 60)
+        ]
+        for (title, offset) in choices {
+            sheet.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
+                guard let self else { return }
+                let when = Date().addingTimeInterval(offset)
+                self.tryAction { try self.app.publishing.schedule(id: item.id, at: when,
+                                                                   reviewer: self.user) }
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(sheet, animated: true)
+    }
+
+    /// Helper that runs a throwing domain action and presents a friendly error
+    /// message on failure. Reloads the table on success so the state-aware UI
+    /// reflects the new item status immediately.
+    private func tryAction(_ body: () throws -> Void) {
+        do {
+            try body()
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            tableView.reloadData()
+        } catch {
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            let msg: String
+            switch error {
+            case is AuthorizationError: msg = "You don't have permission to do that."
+            case ContentError.notFound: msg = "Content item not found."
+            case ContentError.invalidState: msg = "This action isn't available in the current state."
+            case ContentError.cannotApproveOwnDraft: msg = "You can't approve your own draft."
+            case ContentError.scheduleInPast: msg = "Scheduled time must be in the future."
+            case ContentError.noPriorVersion: msg = "There's no previous version to roll back to."
+            default: msg = "Something went wrong. Please try again."
+            }
+            let alert = UIAlertController(title: "Error", message: msg, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+        }
     }
 
     // MARK: - Editor actions
@@ -96,8 +175,15 @@ final class ContentPublishingViewController: UITableViewController {
                 )
                 self.tableView.reloadData()
             } catch {
-                let err = UIAlertController(title: "Error",
-                                            message: error.localizedDescription,
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                let msg: String
+                switch error {
+                case is AuthorizationError: msg = "You don't have permission to do that."
+                case ContentError.notFound: msg = "Content item not found."
+                case ContentError.invalidState: msg = "This action isn't available in the current state."
+                default: msg = "Something went wrong. Please try again."
+                }
+                let err = UIAlertController(title: "Error", message: msg,
                                             preferredStyle: .alert)
                 err.addAction(UIAlertAction(title: "OK", style: .default))
                 self.present(err, animated: true)

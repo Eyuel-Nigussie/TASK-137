@@ -2,6 +2,9 @@ import XCTest
 @testable import RailCommerce
 
 final class AfterSalesServiceTests: XCTestCase {
+    private let customer = User(id: "c1", displayName: "Test Customer", role: .customer)
+    private let csr = User(id: "s1", displayName: "Test CSR", role: .customerService)
+
     private func setup(granted: Bool = true) -> (AfterSalesService, FakeClock, LocalNotificationBus, FakeCamera) {
         let clock = FakeClock(Date(timeIntervalSince1970: 1_704_103_200)) // 2024-01-01 10:00 UTC
         let bus = LocalNotificationBus()
@@ -22,7 +25,7 @@ final class AfterSalesServiceTests: XCTestCase {
     func testOpenRefundOnlyWithoutPhoto() throws {
         let (svc, _, bus, _) = setup()
         let req = request(kind: .refundOnly)
-        let saved = try svc.open(req)
+        let saved = try svc.open(req, actingUser: customer)
         XCTAssertEqual(saved.status, .pending)
         XCTAssertEqual(bus.events.first, "afterSales.opened:\(req.id)")
     }
@@ -30,7 +33,7 @@ final class AfterSalesServiceTests: XCTestCase {
     func testOpenReturnRequiresPhoto() {
         let (svc, _, _, _) = setup()
         let req = request(kind: .returnAndRefund)
-        XCTAssertThrowsError(try svc.open(req)) { err in
+        XCTAssertThrowsError(try svc.open(req, actingUser: customer)) { err in
             XCTAssertEqual(err as? AfterSalesError, .missingPhoto)
         }
     }
@@ -38,7 +41,7 @@ final class AfterSalesServiceTests: XCTestCase {
     func testOpenExchangeWithoutCameraDenied() {
         let (svc, _, _, _) = setup(granted: false)
         let req = request(kind: .exchange)
-        XCTAssertThrowsError(try svc.open(req)) { err in
+        XCTAssertThrowsError(try svc.open(req, actingUser: customer)) { err in
             XCTAssertEqual(err as? AfterSalesError, .cameraDenied)
         }
     }
@@ -46,16 +49,16 @@ final class AfterSalesServiceTests: XCTestCase {
     func testOpenExchangeWithPhotoSucceeds() throws {
         let (svc, _, _, _) = setup()
         let req = request(kind: .exchange, photos: ["att1"])
-        let saved = try svc.open(req)
+        let saved = try svc.open(req, actingUser: customer)
         XCTAssertFalse(saved.photoAttachmentIds.isEmpty)
     }
 
     func testRespondSetsFirstResponse() throws {
         let (svc, clock, bus, _) = setup()
         let req = request(kind: .refundOnly)
-        try svc.open(req)
+        try svc.open(req, actingUser: customer)
         clock.advance(by: 3600)
-        try svc.respond(id: req.id)
+        try svc.respond(id: req.id, actingUser: csr)
         let r = svc.get(req.id)!
         XCTAssertNotNil(r.firstResponseAt)
         XCTAssertEqual(r.status, .awaitingCustomer)
@@ -64,7 +67,7 @@ final class AfterSalesServiceTests: XCTestCase {
 
     func testRespondNotFound() {
         let (svc, _, _, _) = setup()
-        XCTAssertThrowsError(try svc.respond(id: "missing")) { err in
+        XCTAssertThrowsError(try svc.respond(id: "missing", actingUser: csr)) { err in
             XCTAssertEqual(err as? AfterSalesError, .notFound)
         }
     }
@@ -72,9 +75,9 @@ final class AfterSalesServiceTests: XCTestCase {
     func testRespondAlreadyClosed() throws {
         let (svc, _, _, _) = setup()
         let req = request(kind: .refundOnly)
-        try svc.open(req)
-        try svc.close(id: req.id)
-        XCTAssertThrowsError(try svc.respond(id: req.id)) { err in
+        try svc.open(req, actingUser: customer)
+        try svc.close(id: req.id, actingUser: csr)
+        XCTAssertThrowsError(try svc.respond(id: req.id, actingUser: csr)) { err in
             XCTAssertEqual(err as? AfterSalesError, .alreadyClosed)
         }
     }
@@ -82,14 +85,14 @@ final class AfterSalesServiceTests: XCTestCase {
     func testApproveRejectDisputeClose() throws {
         let (svc, _, bus, _) = setup()
         let req = request(kind: .refundOnly)
-        try svc.open(req)
-        try svc.approve(id: req.id)
+        try svc.open(req, actingUser: customer)
+        try svc.approve(id: req.id, actingUser: csr)
         XCTAssertEqual(svc.get(req.id)?.status, .approved)
-        try svc.reject(id: req.id)
+        try svc.reject(id: req.id, actingUser: csr)
         XCTAssertEqual(svc.get(req.id)?.status, .rejected)
-        try svc.dispute(id: req.id)
+        try svc.dispute(id: req.id, actingUser: customer)
         XCTAssertNotNil(svc.get(req.id)?.disputedAt)
-        try svc.close(id: req.id)
+        try svc.close(id: req.id, actingUser: csr)
         XCTAssertEqual(svc.get(req.id)?.status, .closed)
         XCTAssertTrue(bus.events.contains("afterSales.approved:\(req.id)"))
         XCTAssertTrue(bus.events.contains("afterSales.rejected:\(req.id)"))
@@ -99,16 +102,16 @@ final class AfterSalesServiceTests: XCTestCase {
 
     func testApproveNotFound() {
         let (svc, _, _, _) = setup()
-        XCTAssertThrowsError(try svc.approve(id: "x"))
-        XCTAssertThrowsError(try svc.reject(id: "x"))
-        XCTAssertThrowsError(try svc.dispute(id: "x"))
-        XCTAssertThrowsError(try svc.close(id: "x"))
+        XCTAssertThrowsError(try svc.approve(id: "x", actingUser: csr))
+        XCTAssertThrowsError(try svc.reject(id: "x", actingUser: csr))
+        XCTAssertThrowsError(try svc.dispute(id: "x", actingUser: customer))
+        XCTAssertThrowsError(try svc.close(id: "x", actingUser: csr))
     }
 
     func testSLAComputed() throws {
         let (svc, _, _, _) = setup()
         let req = request(kind: .refundOnly)
-        try svc.open(req)
+        try svc.open(req, actingUser: customer)
         let sla = svc.sla(for: req.id)!
         XCTAssertFalse(sla.firstResponseBreached)
         XCTAssertFalse(sla.resolutionBreached)
@@ -117,7 +120,7 @@ final class AfterSalesServiceTests: XCTestCase {
     func testSLABreachesWhenLate() throws {
         let (svc, clock, _, _) = setup()
         let req = request(kind: .refundOnly)
-        try svc.open(req)
+        try svc.open(req, actingUser: customer)
         clock.advance(by: 60 * 60 * 24 * 5) // 5 days later
         let sla = svc.sla(for: req.id)!
         XCTAssertTrue(sla.firstResponseBreached)
@@ -132,7 +135,7 @@ final class AfterSalesServiceTests: XCTestCase {
     func testAutoApprovalRule() throws {
         let (svc, clock, bus, _) = setup()
         let req = request(kind: .refundOnly, amount: 1_000)
-        try svc.open(req)
+        try svc.open(req, actingUser: customer)
         clock.advance(by: 49 * 3600) // 49 hours later
         let changed = svc.runAutomation()
         XCTAssertEqual(changed, [req.id])
@@ -143,8 +146,8 @@ final class AfterSalesServiceTests: XCTestCase {
     func testAutoApprovalSkippedIfDisputed() throws {
         let (svc, clock, _, _) = setup()
         let req = request(kind: .refundOnly, amount: 1_000)
-        try svc.open(req)
-        try svc.dispute(id: req.id)
+        try svc.open(req, actingUser: customer)
+        try svc.dispute(id: req.id, actingUser: customer)
         clock.advance(by: 50 * 3600)
         let changed = svc.runAutomation()
         XCTAssertTrue(changed.isEmpty)
@@ -154,7 +157,7 @@ final class AfterSalesServiceTests: XCTestCase {
     func testAutoApprovalNotAppliedIfAmountOverThreshold() throws {
         let (svc, clock, _, _) = setup()
         let req = request(kind: .refundOnly, amount: 5_000)
-        try svc.open(req)
+        try svc.open(req, actingUser: customer)
         clock.advance(by: 50 * 3600)
         _ = svc.runAutomation()
         XCTAssertNotEqual(svc.get(req.id)?.status, .autoApproved)
@@ -165,7 +168,7 @@ final class AfterSalesServiceTests: XCTestCase {
         let date = Date(timeIntervalSince1970: 1_704_103_200)
         let req = request(kind: .refundOnly, amount: 1_000, created: date,
                           service: date.addingTimeInterval(-60 * 60 * 24 * 20))
-        try svc.open(req)
+        try svc.open(req, actingUser: customer)
         clock.set(date.addingTimeInterval(60 * 60)) // move clock forward a bit
         let changed = svc.runAutomation()
         XCTAssertEqual(changed, [req.id])
@@ -176,16 +179,16 @@ final class AfterSalesServiceTests: XCTestCase {
     func testAutomationSkipsTerminalStates() throws {
         let (svc, _, _, _) = setup()
         let req = request(kind: .refundOnly, amount: 1_000)
-        try svc.open(req)
-        try svc.close(id: req.id)
+        try svc.open(req, actingUser: customer)
+        try svc.close(id: req.id, actingUser: csr)
         let changed = svc.runAutomation()
         XCTAssertTrue(changed.isEmpty)
     }
 
     func testAllReturnsSorted() throws {
         let (svc, _, _, _) = setup()
-        try svc.open(request(kind: .refundOnly))
-        try svc.open(request(kind: .refundOnly))
+        try svc.open(request(kind: .refundOnly), actingUser: customer)
+        try svc.open(request(kind: .refundOnly), actingUser: customer)
         XCTAssertEqual(svc.all().count, 2)
     }
 
@@ -232,9 +235,9 @@ final class AfterSalesServiceTests: XCTestCase {
         let reqB = AfterSalesRequest(id: "R-B", orderId: "O2", kind: .refundOnly,
                                      reason: .defective, createdAt: base,
                                      serviceDate: base, amountCents: 200)
-        try svc.open(reqA2)
-        try svc.open(reqA1)
-        try svc.open(reqB)
+        try svc.open(reqA2, actingUser: customer)
+        try svc.open(reqA1, actingUser: customer)
+        try svc.open(reqB, actingUser: customer)
         // O1 returns 2 items sorted by id: R-A1 < R-A2 (exercises sort closure)
         let o1Requests = svc.requests(for: "O1")
         XCTAssertEqual(o1Requests.count, 2)

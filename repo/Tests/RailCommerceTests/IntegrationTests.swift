@@ -43,11 +43,15 @@ final class IntegrationTests: XCTestCase {
             Discount(code: "SHIPFREE", kind: .freeShipping, magnitude: 0, priority: 3)
         ]
 
+        // Customer for this test flow
+        let customer = User(id: "C1", displayName: "Alice Rider", role: .customer)
+
         // Checkout submits idempotently
         let snap = try app.checkout.submit(orderId: "O-1001", userId: "C1", cart: cart,
                                            discounts: discounts,
                                            address: app.addressBook.defaultAddress!,
-                                           shipping: shipping, invoiceNotes: "Gift")
+                                           shipping: shipping, invoiceNotes: "Gift",
+                                           actingUser: customer)
         XCTAssertTrue(snap.promotion.freeShipping)
         XCTAssertEqual(snap.totalCents, snap.promotion.lineExplanations
                         .reduce(0) { $0 + $1.discountedCents })
@@ -59,17 +63,19 @@ final class IntegrationTests: XCTestCase {
         // Duplicate submission within 10 s is blocked
         XCTAssertThrowsError(try app.checkout.submit(orderId: "O-1001", userId: "C1", cart: cart,
                                                      discounts: discounts, address: address,
-                                                     shipping: shipping, invoiceNotes: "Gift"))
+                                                     shipping: shipping, invoiceNotes: "Gift",
+                                                     actingUser: customer))
 
         // Customer opens refund-only after-sales request
         let rma = AfterSalesRequest(id: "R-1", orderId: "O-1001", kind: .refundOnly,
                                     reason: .defective, createdAt: clock.now(),
                                     serviceDate: clock.now(), amountCents: 1_500)
-        _ = try app.afterSales.open(rma)
+        _ = try app.afterSales.open(rma, actingUser: customer)
 
         // CSR responds within SLA
         clock.advance(by: 60 * 60) // 1h later
-        try app.afterSales.respond(id: "R-1")
+        let csr = User(id: "csr", displayName: "Chris", role: .customerService)
+        try app.afterSales.respond(id: "R-1", actingUser: csr)
         let sla = app.afterSales.sla(for: "R-1")!
         XCTAssertFalse(sla.firstResponseBreached)
 
@@ -94,20 +100,22 @@ final class IntegrationTests: XCTestCase {
                         seatClass: .economy, seatNumber: "1B")
         svc.registerSeat(a)
         svc.registerSeat(b)
-        svc.snapshot(date: "2024-01-02")
+        try svc.snapshot(date: "2024-01-02")
+
+        let salesAgent = User(id: "A1", displayName: "Sales Agent", role: .salesAgent)
 
         // Reserve both in an atomic block but force failure.
         XCTAssertThrowsError(try svc.atomic {
-            _ = try svc.reserve(a, holderId: "H")
-            _ = try svc.reserve(b, holderId: "H")
+            _ = try svc.reserve(a, holderId: "H", actingUser: salesAgent)
+            _ = try svc.reserve(b, holderId: "H", actingUser: salesAgent)
             throw SeatError.notAvailable
         })
         XCTAssertEqual(svc.state(a), .available)
         XCTAssertEqual(svc.state(b), .available)
 
         // Proper success path confirms.
-        try svc.reserve(a, holderId: "H")
-        try svc.confirm(a, holderId: "H")
+        try svc.reserve(a, holderId: "H", actingUser: salesAgent)
+        try svc.confirm(a, holderId: "H", actingUser: salesAgent)
         XCTAssertEqual(svc.state(a), .sold)
 
         // Audit rollback to snapshot restores availability.
@@ -123,13 +131,14 @@ final class IntegrationTests: XCTestCase {
         let editor = User(id: "e1", displayName: "Eve", role: .contentEditor)
         let reviewer = User(id: "r1", displayName: "Rita", role: .contentReviewer)
 
-        _ = svc.createDraft(id: "adv-1", kind: .travelAdvisory, title: "Snow Delay",
-                            tag: TaxonomyTag(region: .northeast), body: "v1", editorId: editor.id)
+        _ = try svc.createDraft(id: "adv-1", kind: .travelAdvisory, title: "Snow Delay",
+                                tag: TaxonomyTag(region: .northeast), body: "v1",
+                                editorId: editor.id, actingUser: editor)
         // Editor cannot publish directly; reviewer must approve.
         XCTAssertThrowsError(try svc.approve(id: "adv-1", reviewer: editor))
 
-        _ = try svc.edit(id: "adv-1", body: "v2", editorId: editor.id)
-        try svc.submitForReview(id: "adv-1")
+        _ = try svc.edit(id: "adv-1", body: "v2", editorId: editor.id, actingUser: editor)
+        try svc.submitForReview(id: "adv-1", actingUser: editor)
         try svc.schedule(id: "adv-1", at: clock.now().addingTimeInterval(30), reviewer: reviewer)
 
         // Battery drops — scheduler defers.
@@ -149,22 +158,24 @@ final class IntegrationTests: XCTestCase {
         let clock = FakeClock()
         let svc = MessagingService(clock: clock)
 
+        let csrUser = User(id: "csr1", displayName: "CSR", role: .customerService)
         // Contact masking applied when content is safe.
         let masked = try svc.enqueue(id: "m1", from: "csr1", to: "agent2",
-                                     body: "reach the rider at rider@mail.com or 555 222 3333")
+                                     body: "reach the rider at rider@mail.com or 555 222 3333",
+                                     actingUser: csrUser)
         XCTAssertTrue(masked.body.contains("****@****"))
         // Last 4 digits of 555 222 3333 are preserved: ***-***-3333
         XCTAssertTrue(masked.body.contains("***-***-3333"))
 
         // Sensitive data blocked.
         XCTAssertThrowsError(try svc.enqueue(id: "m2", from: "csr1", to: "agent2",
-                                             body: "SSN 111-22-3333"))
+                                             body: "SSN 111-22-3333", actingUser: csrUser))
 
         // Large attachment rejected.
         let huge = MessageAttachment(id: "big", kind: .pdf,
                                      sizeBytes: MessagingService.maxAttachmentBytes + 1)
         XCTAssertThrowsError(try svc.enqueue(id: "m3", from: "csr1", to: "agent2",
-                                             body: "hi", attachments: [huge]))
+                                             body: "hi", attachments: [huge], actingUser: csrUser))
 
         // Queue drains after offline sync.
         clock.advance(by: 10)
@@ -189,7 +200,7 @@ final class IntegrationTests: XCTestCase {
             desiredYears: 5,
             filter: .or(.hasSkill("swift"), .hasCertification("railSafety"))
         )
-        let matches = svc.search(criteria)
+        let matches = svc.searchUnchecked(criteria)
         XCTAssertEqual(matches.first?.resumeId, "r1")
         XCTAssertTrue(matches.first?.explanation.contains("skills=100%") ?? false)
 
@@ -239,9 +250,10 @@ final class IntegrationTests: XCTestCase {
         let admin = User(id: "a1", displayName: "Admin", role: .administrator)
         let editor = User(id: "e1", displayName: "E", role: .contentEditor)
 
-        _ = svc.createDraft(id: "c1", kind: .onboardOffer, title: "Offer",
-                            tag: TaxonomyTag(), body: "v1", editorId: editor.id)
-        try svc.submitForReview(id: "c1")
+        _ = try svc.createDraft(id: "c1", kind: .onboardOffer, title: "Offer",
+                                tag: TaxonomyTag(), body: "v1",
+                                editorId: editor.id, actingUser: editor)
+        try svc.submitForReview(id: "c1", actingUser: editor)
 
         // Administrator may also approve (policy allows publishContent).
         XCTAssertTrue(RolePolicy.can(.administrator, .publishContent))

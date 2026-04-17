@@ -15,7 +15,7 @@ final class TalentMatchingServiceTests: XCTestCase {
 
     func testSearchSkillMatchScoreAndExplanation() {
         let svc = sampleService()
-        let matches = svc.search(TalentSearchCriteria(
+        let matches = svc.searchUnchecked(TalentSearchCriteria(
             wantedSkills: ["swift", "ios"], wantedCertifications: ["cpr"], desiredYears: 10))
         XCTAssertEqual(matches.first?.resumeId, "r1")
         XCTAssertEqual(matches.first?.matchedSkills, ["ios", "swift"])
@@ -27,7 +27,7 @@ final class TalentMatchingServiceTests: XCTestCase {
         let svc = TalentMatchingService()
         svc.importResume(Resume(id: "r", name: "X", skills: ["a"],
                                 yearsExperience: 10, certifications: ["c"]))
-        let matches = svc.search(TalentSearchCriteria(
+        let matches = svc.searchUnchecked(TalentSearchCriteria(
             wantedSkills: ["a"], wantedCertifications: ["c"], desiredYears: 10))
         let top = try XCTUnwrap(matches.first)
         // skillScore 0.5, expScore 0.3, certScore 0.2 → total 1.0
@@ -39,7 +39,7 @@ final class TalentMatchingServiceTests: XCTestCase {
 
     func testZeroCriteriaReturnsAllWithZeroScore() {
         let svc = sampleService()
-        let matches = svc.search(TalentSearchCriteria())
+        let matches = svc.searchUnchecked(TalentSearchCriteria())
         XCTAssertEqual(matches.count, 2)
         XCTAssertTrue(matches.allSatisfy { $0.score == 0 })
     }
@@ -47,7 +47,7 @@ final class TalentMatchingServiceTests: XCTestCase {
     func testBooleanFilterAnd() {
         let svc = sampleService()
         let f: BooleanFilter = .and(.hasSkill("swift"), .minYears(4))
-        let matches = svc.search(TalentSearchCriteria(filter: f))
+        let matches = svc.searchUnchecked(TalentSearchCriteria(filter: f))
         XCTAssertEqual(matches.map { $0.resumeId }, ["r1"])
     }
 
@@ -55,10 +55,10 @@ final class TalentMatchingServiceTests: XCTestCase {
         let svc = sampleService()
         svc.bulkTag(ids: ["r2"], add: "Remote")
         let f: BooleanFilter = .or(.hasTag("Remote"), .hasCertification("cpr"))
-        let matches = svc.search(TalentSearchCriteria(filter: f))
+        let matches = svc.searchUnchecked(TalentSearchCriteria(filter: f))
         XCTAssertEqual(Set(matches.map { $0.resumeId }), ["r1", "r2"])
         let fNot: BooleanFilter = .not(.hasSkill("swift"))
-        let matches2 = svc.search(TalentSearchCriteria(filter: fNot))
+        let matches2 = svc.searchUnchecked(TalentSearchCriteria(filter: fNot))
         XCTAssertEqual(matches2.map { $0.resumeId }, ["r2"])
     }
 
@@ -84,7 +84,7 @@ final class TalentMatchingServiceTests: XCTestCase {
         let svc = TalentMatchingService()
         svc.importResume(Resume(id: "r", name: "N", skills: [], yearsExperience: 0,
                                 certifications: [], tags: ["remote"]))
-        let matches = svc.search(TalentSearchCriteria(filter: .hasTag("remote")))
+        let matches = svc.searchUnchecked(TalentSearchCriteria(filter: .hasTag("remote")))
         XCTAssertEqual(matches.first?.resumeId, "r")
     }
 
@@ -92,7 +92,7 @@ final class TalentMatchingServiceTests: XCTestCase {
         let svc = TalentMatchingService()
         svc.importResume(Resume(id: "b", name: "B", skills: ["s"], yearsExperience: 0, certifications: []))
         svc.importResume(Resume(id: "a", name: "A", skills: ["s"], yearsExperience: 0, certifications: []))
-        let m = svc.search(TalentSearchCriteria(wantedSkills: ["s"]))
+        let m = svc.searchUnchecked(TalentSearchCriteria(wantedSkills: ["s"]))
         XCTAssertEqual(m.map { $0.resumeId }, ["a", "b"])
     }
 
@@ -111,7 +111,7 @@ final class TalentMatchingServiceTests: XCTestCase {
     func testExplanationIncludesPercentagesEvenWhenZero() {
         let svc = TalentMatchingService()
         svc.importResume(Resume(id: "r", name: "n", skills: [], yearsExperience: 0, certifications: []))
-        let m = svc.search(TalentSearchCriteria(wantedSkills: ["missing"]))
+        let m = svc.searchUnchecked(TalentSearchCriteria(wantedSkills: ["missing"]))
         XCTAssertTrue(m.isEmpty, "resume with zero score filtered when criteria exists")
     }
 }

@@ -54,8 +54,9 @@ final class AttachmentServiceTests: XCTestCase {
     }
 
     func testStoredAttachmentCodable() throws {
-        let a = StoredAttachment(id: "x", sandboxPath: "p", sizeBytes: 10,
-                                 kind: .pdf, storedAt: Date(timeIntervalSince1970: 0))
+        let a = StoredAttachment(id: "x", sandboxPath: "p", fileURL: nil,
+                                 sizeBytes: 10, kind: .pdf,
+                                 storedAt: Date(timeIntervalSince1970: 0), sha256: nil)
         let data = try JSONEncoder().encode(a)
         XCTAssertEqual(try JSONDecoder().decode(StoredAttachment.self, from: data), a)
     }

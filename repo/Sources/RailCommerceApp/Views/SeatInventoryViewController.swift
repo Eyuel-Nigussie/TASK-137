@@ -1,17 +1,17 @@
 #if canImport(UIKit)
 import UIKit
 import RailCommerce
+import RxSwift
 
-/// Seat selection and reservation for customers and sales agents.
+/// Dynamic seat selection and reservation. Renders all registered seats from the
+/// inventory service, grouped by train/date/segment, instead of a single sample.
 final class SeatInventoryViewController: UITableViewController {
 
     private let app: RailCommerce
     private let user: User
-
-    // Sample train/date/segment for demo; real app would be populated from catalog.
-    private let sampleKey = SeatKey(trainId: "NE1", date: "2024-01-02",
-                                    segmentId: "NY-BOS", seatClass: .economy, seatNumber: "12A")
-    private var statusLabel: UILabel?
+    private let disposeBag = DisposeBag()
+    private var seats: [SeatKey] = []
+    private let emptyLabel = UILabel()
 
     init(app: RailCommerce, user: User) {
         self.app = app
@@ -24,29 +24,75 @@ final class SeatInventoryViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Seat Inventory"
-        app.seatInventory.registerSeat(sampleKey)
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .add, target: self, action: #selector(seedSampleSeats))
+        navigationItem.rightBarButtonItem?.accessibilityLabel = "Add sample seats"
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "seat")
+        emptyLabel.text = "No seats registered.\nTap + to seed sample inventory."
+        emptyLabel.textAlignment = .center
+        emptyLabel.textColor = .secondaryLabel
+        emptyLabel.font = .preferredFont(forTextStyle: .body)
+        emptyLabel.adjustsFontForContentSizeCategory = true
+        emptyLabel.numberOfLines = 0
+        tableView.backgroundView = emptyLabel
+        app.seatInventory.events
+            .observe(on: MainScheduler.instance)
+            .subscribe(onNext: { [weak self] _ in self?.reloadSeats() })
+            .disposed(by: disposeBag)
+        reloadSeats()
     }
 
+    private func reloadSeats() {
+        // Derive the seat list from the service's persisted state so the UI
+        // survives app restart and reflects all registered seats.
+        seats = app.seatInventory.registeredKeys()
+        emptyLabel.isHidden = !seats.isEmpty
+        tableView.reloadData()
+    }
+
+    @objc private func seedSampleSeats() {
+        let trains = ["NE1", "SW2", "MW3"]
+        let classes: [SeatClass] = [.economy, .business, .first]
+        for train in trains {
+            for cls in classes {
+                for num in ["1A", "1B", "2A", "2B"] {
+                    let key = SeatKey(trainId: train, date: "2024-06-15",
+                                      segmentId: "\(train)-SEG", seatClass: cls, seatNumber: num)
+                    if app.seatInventory.state(key) == nil {
+                        app.seatInventory.registerSeat(key)
+                    }
+                }
+            }
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        reloadSeats()
+    }
+
+    // MARK: - UITableViewDataSource
+
     override func tableView(_ tableView: UITableView,
-                            numberOfRowsInSection section: Int) -> Int { 1 }
+                            numberOfRowsInSection section: Int) -> Int { seats.count }
 
     override func tableView(_ tableView: UITableView,
                             cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "seat", for: indexPath)
+        let key = seats[indexPath.row]
+        let state = app.seatInventory.state(key) ?? .available
         var config = cell.defaultContentConfiguration()
-        config.text = "\(sampleKey.trainId) — Seat \(sampleKey.seatNumber)"
-        let state = app.seatInventory.state(sampleKey) ?? .available
-        config.secondaryText = state.rawValue.capitalized
+        config.text = "\(key.trainId) — \(key.seatClass.rawValue.capitalized) \(key.seatNumber)"
+        config.secondaryText = "\(key.date) | \(state.rawValue.capitalized)"
         cell.contentConfiguration = config
         cell.accessoryType = state == .available ? .disclosureIndicator : .none
         return cell
     }
 
+    // MARK: - UITableViewDelegate
+
     override func tableView(_ tableView: UITableView,
                             didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        guard app.seatInventory.state(sampleKey) == .available else {
+        let key = seats[indexPath.row]
+        guard app.seatInventory.state(key) == .available else {
             showAlert("Seat Unavailable", message: "This seat is already reserved or sold.")
             return
         }
@@ -56,14 +102,26 @@ final class SeatInventoryViewController: UITableViewController {
             return
         }
         do {
-            let res = try app.seatInventory.reserve(sampleKey,
-                                                    holderId: user.id,
-                                                    actingUser: user)
+            let res = try app.seatInventory.reserve(key, holderId: user.id, actingUser: user)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
             showAlert("Reserved",
                       message: "Seat held until \(res.expiresAt.formatted(date: .omitted, time: .shortened))")
-            tableView.reloadData()
+            reloadSeats()
         } catch {
-            showAlert("Error", message: error.localizedDescription)
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            showAlert("Error", message: friendlyMessage(for: error))
+        }
+    }
+
+    private func friendlyMessage(for error: Error) -> String {
+        switch error {
+        case SeatError.unknownSeat:      return "This seat is not in the system."
+        case SeatError.notAvailable:     return "This seat is not available."
+        case SeatError.notReserved:      return "No active reservation for this seat."
+        case SeatError.reservationExpired: return "Your reservation has expired."
+        case SeatError.wrongHolder:      return "Reservation held by another user."
+        case is AuthorizationError:      return "You don't have permission to do that."
+        default:                         return "Something went wrong. Please try again."
         }
     }
 

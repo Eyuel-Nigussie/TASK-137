@@ -8,6 +8,18 @@ public protocol SecureStore: AnyObject {
     func get(_ key: String) -> Data?
     func delete(_ key: String) throws
     func allKeys() -> [String]
+    /// Mark `key` as immutable. Implementations that can't enforce immutability at
+    /// the store level (e.g. iOS Keychain) should layer an HMAC signature at the
+    /// value level instead; the protocol-level default is a no-op so callers can
+    /// call `seal` uniformly without casting.
+    func seal(_ key: String)
+    /// `true` if `key` has been sealed.
+    func isSealed(_ key: String) -> Bool
+}
+
+public extension SecureStore {
+    func seal(_ key: String) {}
+    func isSealed(_ key: String) -> Bool { false }
 }
 
 public enum SecureStoreError: Error, Equatable {
