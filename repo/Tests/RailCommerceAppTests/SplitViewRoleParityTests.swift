@@ -43,8 +43,12 @@ final class SplitViewRoleParityTests: XCTestCase {
     // MARK: - Sales Agent parity on iPad
 
     /// Covers: audit report-1 Blocker — Sales Agent transaction flow on iPad.
-    /// Sidebar MUST include Cart, Seats, and Returns for `.salesAgent` so an
-    /// on-behalf-of-customer sale is reachable from the iPad shell.
+    /// Sidebar MUST include Cart and Seats for `.salesAgent` so an
+    /// on-behalf-of-customer sale is reachable from the iPad shell. Sales
+    /// Agent does NOT hold `.manageAfterSales` / `.handleServiceTickets`,
+    /// so Returns correctly stays hidden for this role (that's the CSR /
+    /// customer surface — audit report-2 pass #6 tightens the Returns gate
+    /// to the correct permissions).
     func testSalesAgentSidebarIncludesTransactionFeaturesOnSplitShell() {
         let agent = User(id: "a1", displayName: "Sam Agent", role: .salesAgent)
         let titles = sidebarTitles(for: agent)
@@ -52,8 +56,8 @@ final class SplitViewRoleParityTests: XCTestCase {
                       "Sales Agent must see 'Cart' on the iPad split-view sidebar (audit report-1 Blocker)")
         XCTAssertTrue(titles.contains("Seats"),
                       "Sales Agent must see 'Seats' on the iPad split-view sidebar")
-        XCTAssertTrue(titles.contains("Returns"),
-                      "Sales Agent must see 'Returns' on the iPad split-view sidebar")
+        XCTAssertFalse(titles.contains("Returns"),
+                       "Sales Agent has no after-sales permission; Returns must stay hidden for this role")
     }
 
     // MARK: - Customer parity — baseline
@@ -63,7 +67,48 @@ final class SplitViewRoleParityTests: XCTestCase {
         let titles = sidebarTitles(for: customer)
         XCTAssertTrue(titles.contains("Cart"))
         XCTAssertTrue(titles.contains("Seats"))
+        // Customer holds `.manageAfterSales` so Returns is visible to file
+        // return / refund / exchange requests.
         XCTAssertTrue(titles.contains("Returns"))
+    }
+
+    // MARK: - CSR must see Returns on both shells (audit report-2 pass #6 High)
+
+    /// CSR holds `.handleServiceTickets` and `.manageAfterSales`; they must
+    /// see the Returns / after-sales feature on the iPad sidebar so they can
+    /// work their case queue from the primary nav.
+    func testCSRShellIncludesReturnsOnSplitShell() {
+        let csr = User(id: "csr1", displayName: "Chris CSR",
+                       role: .customerService)
+        let titles = sidebarTitles(for: csr)
+        XCTAssertTrue(titles.contains("Returns"),
+                      "CSR must see 'Returns' on the iPad sidebar (audit report-2 pass #6 High)")
+    }
+
+    /// CSR has neither `.purchase` nor `.processTransaction`; the Cart and
+    /// Seats tabs must stay hidden to match role semantics (CSR does not
+    /// submit orders or reserve seats — they handle tickets).
+    func testCSRShellHidesCartAndSeats() {
+        let csr = User(id: "csr1", displayName: "Chris CSR",
+                       role: .customerService)
+        let titles = sidebarTitles(for: csr)
+        XCTAssertFalse(titles.contains("Cart"),
+                       "CSR must not see Cart (no .purchase / .processTransaction)")
+        XCTAssertFalse(titles.contains("Seats"),
+                       "CSR must not see Seats (no .purchase / .processTransaction)")
+    }
+
+    /// Tab-bar parity: CSR must also see Returns on iPhone.
+    func testCSRTabBarIncludesReturns() {
+        let csr = User(id: "csr1", displayName: "Chris CSR",
+                       role: .customerService)
+        let app = makeApp()
+        let tabBar = MainTabBarController(app: app, currentUser: csr)
+        tabBar.loadViewIfNeeded()
+        let titles = (tabBar.viewControllers ?? [])
+            .compactMap { $0.tabBarItem.title }
+        XCTAssertTrue(titles.contains("Returns"),
+                      "CSR must see 'Returns' on the iPhone tab bar too (audit report-2 pass #6 High)")
     }
 
     // MARK: - Content Editor must NOT see transaction features

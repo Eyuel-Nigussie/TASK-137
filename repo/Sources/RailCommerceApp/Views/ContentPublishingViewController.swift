@@ -35,13 +35,13 @@ final class ContentPublishingViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView,
                             numberOfRowsInSection section: Int) -> Int {
-        app.publishing.items(publishedOnly: false).count
+        app.publishing.itemsVisible(to: user).count
     }
 
     override func tableView(_ tableView: UITableView,
                             cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "item", for: indexPath)
-        let item = app.publishing.items(publishedOnly: false)[indexPath.row]
+        let item = app.publishing.itemsVisible(to: user)[indexPath.row]
         var config = cell.defaultContentConfiguration()
         config.text = item.title
         config.secondaryText = item.status.rawValue.capitalized
@@ -53,7 +53,7 @@ final class ContentPublishingViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let item = app.publishing.items(publishedOnly: false)[indexPath.row]
+        let item = app.publishing.itemsVisible(to: user)[indexPath.row]
         presentActionsSheet(for: item)
     }
 

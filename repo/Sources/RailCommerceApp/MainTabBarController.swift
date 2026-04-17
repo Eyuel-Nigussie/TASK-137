@@ -34,11 +34,9 @@ final class MainTabBarController: UITabBarController {
         tabs.append(nav(ContentBrowseViewController(app: app, user: currentUser),
                         title: "Advisories", image: "newspaper"))
 
-        // Sales tabs (Cart, Seats, Returns) are shown to anyone who can
-        // execute a transaction — customers via `.purchase` AND sales agents
-        // via `.processTransaction` (on-behalf-of sales). This satisfies the
-        // prompt's "Sales Agent performs ticket/merchandise sales" flow
-        // directly in the UI.
+        // Sales tabs (Cart, Seats) — customers via `.purchase` AND sales
+        // agents via `.processTransaction` (on-behalf-of sales). This is the
+        // prompt's "Sales Agent performs ticket/merchandise sales" flow.
         let canTransact = RolePolicy.can(currentUser.role, .purchase)
                         || RolePolicy.can(currentUser.role, .processTransaction)
         if canTransact {
@@ -46,6 +44,17 @@ final class MainTabBarController: UITabBarController {
                             title: "Cart", image: "cart"))
             tabs.append(nav(SeatInventoryViewController(app: app, user: currentUser),
                             title: "Seats", image: "tram.fill"))
+        }
+
+        // Returns / after-sales: shown to anyone who can interact with the
+        // after-sales workflow — customers file requests (`.manageAfterSales`)
+        // and CSR works their case queue (`.handleServiceTickets`). This must
+        // NOT be gated on transaction roles alone — CSR has no `.purchase` /
+        // `.processTransaction`, and gating it on those would lock CSR out of
+        // their primary workflow (audit report-2 pass #6 High).
+        let canUseAfterSales = RolePolicy.can(currentUser.role, .manageAfterSales)
+                             || RolePolicy.can(currentUser.role, .handleServiceTickets)
+        if canUseAfterSales {
             tabs.append(nav(AfterSalesViewController(app: app, user: currentUser),
                             title: "Returns", image: "arrow.uturn.left.circle"))
         }

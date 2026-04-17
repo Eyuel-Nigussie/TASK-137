@@ -65,7 +65,7 @@ _ = try app.publishing.edit(id: "adv-1", body: "Expect 45-min delays.", editorId
                             actingUser: editor)
 try app.publishing.submitForReview(id: "adv-1", actingUser: editor)
 try app.publishing.approve(id: "adv-1", reviewer: reviewer)
-if let item = app.publishing.get("adv-1") {
+if let item = app.publishing.get("adv-1", actingUser: reviewer) {
     ok("Advisory published")
     kv("status", item.status.rawValue)
     kv("version", item.currentVersion)

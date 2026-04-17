@@ -329,4 +329,80 @@ final class AuditReport2ClosureTests: XCTestCase {
         XCTAssertNoThrow(try svc.confirm(seat, holderId: "someone-else",
                                          actingUser: agent))
     }
+
+    // MARK: - Audit report-2 pass #6 Medium: content non-published read auth
+
+    private func contentServiceWithDraftAndPublished() throws
+        -> (ContentPublishingService, String, String) {
+        let svc = ContentPublishingService(clock: FakeClock(), battery: FakeBattery())
+        let reviewer = User(id: "r1", displayName: "Ri", role: .contentReviewer)
+        // Create one draft (never published).
+        _ = try svc.createDraft(id: "draft-1", kind: .travelAdvisory,
+                                title: "Draft", tag: TaxonomyTag(),
+                                body: "v1", editorId: editor.id,
+                                actingUser: editor)
+        // Create another and push it all the way to published.
+        _ = try svc.createDraft(id: "pub-1", kind: .travelAdvisory,
+                                title: "Published", tag: TaxonomyTag(),
+                                body: "v1", editorId: editor.id,
+                                actingUser: editor)
+        try svc.submitForReview(id: "pub-1", actingUser: editor)
+        try svc.approve(id: "pub-1", reviewer: reviewer)
+        return (svc, "draft-1", "pub-1")
+    }
+
+    /// A customer (no `.draftContent` / `.publishContent`) must see ONLY the
+    /// published item via `itemsVisible`. Drafts are invisible at the
+    /// service boundary — not just hidden by UI gating.
+    func testCustomerItemsVisibleReturnsOnlyPublished() throws {
+        let (svc, draftId, pubId) = try contentServiceWithDraftAndPublished()
+        let visible = svc.itemsVisible(to: customer).map { $0.id }
+        XCTAssertTrue(visible.contains(pubId),
+                      "customer must see published items")
+        XCTAssertFalse(visible.contains(draftId),
+                       "customer must NOT see unpublished drafts (audit report-2 pass #6 Medium)")
+    }
+
+    /// Editors (`.draftContent`) and reviewers (`.publishContent`) must see
+    /// EVERY item — that's the workflow they're authorized to run.
+    func testPrivilegedRolesItemsVisibleReturnsEverything() throws {
+        let (svc, draftId, pubId) = try contentServiceWithDraftAndPublished()
+        let reviewer = User(id: "r1", displayName: "Ri", role: .contentReviewer)
+        for privileged in [editor, reviewer] {
+            let visible = svc.itemsVisible(to: privileged).map { $0.id }
+            XCTAssertTrue(visible.contains(draftId),
+                          "\(privileged.role) must see drafts")
+            XCTAssertTrue(visible.contains(pubId),
+                          "\(privileged.role) must see published")
+        }
+    }
+
+    /// By-id read: a customer asking for a draft must get `nil`. No
+    /// information leak — the result is indistinguishable from a missing
+    /// item. Published item reads still pass through.
+    func testGetActingUserHidesDraftsFromCustomer() throws {
+        let (svc, draftId, pubId) = try contentServiceWithDraftAndPublished()
+        XCTAssertNil(svc.get(draftId, actingUser: customer),
+                     "customer must not read an unpublished draft by id")
+        XCTAssertNotNil(svc.get(pubId, actingUser: customer),
+                        "customer must still read published items")
+    }
+
+    /// Editor/reviewer can read drafts by id so the authoring workflow works.
+    func testGetActingUserAllowsPrivilegedRolesToReadDrafts() throws {
+        let (svc, draftId, _) = try contentServiceWithDraftAndPublished()
+        let reviewer = User(id: "r1", displayName: "Ri", role: .contentReviewer)
+        XCTAssertNotNil(svc.get(draftId, actingUser: editor))
+        XCTAssertNotNil(svc.get(draftId, actingUser: reviewer))
+    }
+
+    /// `publishedItems` always returns only `.published` regardless of caller
+    /// — it's the safe default for customer-browse surfaces.
+    func testPublishedItemsReturnsOnlyPublishedIrrespectiveOfCaller() throws {
+        let (svc, draftId, pubId) = try contentServiceWithDraftAndPublished()
+        let all = svc.publishedItems().map { $0.id }
+        XCTAssertEqual(all, [pubId],
+                       "publishedItems must only ever return status==.published")
+        XCTAssertFalse(all.contains(draftId))
+    }
 }

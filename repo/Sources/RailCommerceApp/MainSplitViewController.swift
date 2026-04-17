@@ -74,12 +74,9 @@ final class FeatureSidebarViewController: UITableViewController {
                     factory: { ContentBrowseViewController(app: app, user: currentUser) })
         ]
 
-        // Transaction-capable roles get Cart / Seats / Returns. This matches
-        // the `canTransact` logic in `MainTabBarController` so the iPad
-        // split-view shell is not a stricter shell than the iPhone tab-bar
-        // shell — Sales Agents (.processTransaction) must be able to execute
-        // an on-behalf sale on iPad too, which is exactly what the prompt
-        // requires.
+        // Transaction-capable roles get Cart / Seats. Matches the
+        // `canTransact` logic in `MainTabBarController` so Sales Agents
+        // (.processTransaction) can execute on-behalf sales on iPad too.
         let canTransact = RolePolicy.can(currentUser.role, .purchase)
                         || RolePolicy.can(currentUser.role, .processTransaction)
         if canTransact {
@@ -87,6 +84,15 @@ final class FeatureSidebarViewController: UITableViewController {
                                     factory: { CartViewController(app: app, user: currentUser) }))
             features.append(Feature(title: "Seats", systemImage: "tram.fill",
                                     factory: { SeatInventoryViewController(app: app, user: currentUser) }))
+        }
+
+        // Returns / after-sales: customers (`.manageAfterSales`) AND CSR
+        // (`.handleServiceTickets`). CSR must not be locked out of their
+        // primary workflow by a transaction-only gate (audit report-2 pass
+        // #6 High).
+        let canUseAfterSales = RolePolicy.can(currentUser.role, .manageAfterSales)
+                             || RolePolicy.can(currentUser.role, .handleServiceTickets)
+        if canUseAfterSales {
             features.append(Feature(title: "Returns", systemImage: "arrow.uturn.left.circle",
                                     factory: { AfterSalesViewController(app: app, user: currentUser) }))
         }

@@ -45,7 +45,7 @@ final class ContentBrowseViewController: UITableViewController {
     }
 
     private func reload() {
-        items = app.publishing.items(filter: currentFilter, publishedOnly: true)
+        items = app.publishing.publishedItems(filter: currentFilter)
         emptyLabel.isHidden = !items.isEmpty
         tableView.reloadData()
         updateTitle()

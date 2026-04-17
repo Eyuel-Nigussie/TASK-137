@@ -132,11 +132,35 @@ public final class ContentPublishingService {
         hydrate()
     }
 
-    public func items(filter: TaxonomyTag = TaxonomyTag(), publishedOnly: Bool = true) -> [ContentItem] {
+    /// Raw listing with arbitrary `publishedOnly`. **Internal only** so the
+    /// service boundary, not caller discipline, gates visibility of
+    /// unpublished drafts / rejected / scheduled content. External callers
+    /// must use `itemsVisible(to:filter:)` or the published-only
+    /// `publishedItems(filter:)`.
+    internal func items(filter: TaxonomyTag = TaxonomyTag(), publishedOnly: Bool = true) -> [ContentItem] {
         items.values
             .filter { publishedOnly ? $0.status == .published : true }
             .filter { $0.tag.matches(filter) }
             .sorted { $0.id < $1.id }
+    }
+
+    /// Public read path for customer-visible content — returns only items
+    /// whose status is `.published`. Every role can call this.
+    public func publishedItems(filter: TaxonomyTag = TaxonomyTag()) -> [ContentItem] {
+        items(filter: filter, publishedOnly: true)
+    }
+
+    /// Role-aware listing. Editors / reviewers / admin see every item
+    /// (drafts, in-review, rejected, scheduled, published, rolled-back);
+    /// every other role sees only `.published` content. Enforces the
+    /// confidentiality boundary at the service layer so a future call site
+    /// that forgets to gate cannot leak drafts to customers.
+    public func itemsVisible(to actingUser: User,
+                             filter: TaxonomyTag = TaxonomyTag()) -> [ContentItem] {
+        let privileged = RolePolicy.can(actingUser.role, .draftContent)
+                      || RolePolicy.can(actingUser.role, .publishContent)
+        let publishedOnly = !privileged
+        return items(filter: filter, publishedOnly: publishedOnly)
     }
 
     /// Attachment ids currently referenced by any content version's media refs.
@@ -361,7 +385,24 @@ public final class ContentPublishingService {
         logger.info(.content, "rollback id=\(id) actor=\(actingUser.id) preservedPublished=\(wasPublished)")
     }
 
-    public func get(_ id: String) -> ContentItem? { items[id] }
+    /// Raw by-id read. **Internal only** — external call sites must use
+    /// `get(_:actingUser:)` so unpublished drafts are not leaked to roles
+    /// without `.draftContent` / `.publishContent`.
+    internal func get(_ id: String) -> ContentItem? { items[id] }
+
+    /// Role-aware by-id read. Returns the item only if it is `.published`
+    /// OR the caller holds `.draftContent` / `.publishContent`. Non-
+    /// privileged callers asking for an unpublished item get `nil` — no
+    /// information leak about draft existence either.
+    public func get(_ id: String, actingUser: User) -> ContentItem? {
+        guard let item = items[id] else { return nil }
+        if item.status == .published { return item }
+        if RolePolicy.can(actingUser.role, .draftContent)
+           || RolePolicy.can(actingUser.role, .publishContent) {
+            return item
+        }
+        return nil
+    }
 
     // MARK: - Persistence
 
