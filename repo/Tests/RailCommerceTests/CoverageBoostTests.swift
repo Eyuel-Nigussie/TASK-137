@@ -360,6 +360,31 @@ final class CoverageBoostTests: XCTestCase {
                        "inbound message with valid attachment must pass the safety pipeline")
     }
 
+    /// Covers: `acceptInbound` persist-failure log branch (Services/MessagingService.swift:433-434).
+    /// Inbound delivery already succeeded via the transport layer; if the post-hoc
+    /// audit row fails to persist, the service must log (not throw, not un-deliver).
+    func testInboundPersistFailureLoggedButMessageStillDelivered() {
+        final class Xport: MessageTransport {
+            var handlers: [(Message) -> Void] = []
+            func send(_ message: Message) throws -> [String] { [] }
+            func onReceive(_ h: @escaping (Message) -> Void) { handlers.append(h) }
+            func start(asPeer peerId: String) throws {}
+            func stop() {}
+            var connectedPeers: [String] { [] }
+            func deliver(_ msg: Message) { handlers.forEach { $0(msg) } }
+        }
+        let failing = ToggleStore()
+        let transport = Xport()
+        let svc = MessagingService(clock: FakeClock(), transport: transport,
+                                   persistence: failing)
+        failing.failOnSave = true
+        transport.deliver(Message(id: "m1", fromUserId: "peer",
+                                  toUserId: customer.id, body: "hi",
+                                  createdAt: Date()))
+        XCTAssertEqual(svc.deliveredMessages.count, 1,
+                       "inbound delivery must still land even when audit persist fails")
+    }
+
     /// Covers: `MessagingService.hydrate` queued-append branch (:463-464).
     func testMessagingHydrateRestoresQueuedMessages() throws {
         let store = InMemoryPersistenceStore()
