@@ -44,6 +44,20 @@ for tool in xcodebuild xcrun; do
 done
 
 ############################
+# 0. Detect stale locks / leftover SwiftPM processes from a prior aborted run.
+#    These manifest as "Another instance of SwiftPM ... is already running"
+#    when the user re-runs this script. Bail out with an actionable message.
+############################
+if [[ -d .build ]] && pgrep -fl 'swift(-build|-test| test)' >/dev/null 2>&1; then
+    EXISTING_PIDS=$(pgrep -f 'swift(-build|-test| test)' | tr '\n' ' ')
+    echo "Error: another SwiftPM / swift test process is already running: ${EXISTING_PIDS}"
+    echo "       Kill it first (e.g. 'kill ${EXISTING_PIDS}') or wait for it to"
+    echo "       finish before re-running this script. Concurrent swift tests"
+    echo "       on the same .build directory corrupts state."
+    exit 1
+fi
+
+############################
 # 1. Library XCTest via swift test
 ############################
 echo ">>> [1/2] Running library tests via 'swift test --enable-code-coverage'..."
@@ -114,6 +128,14 @@ xcodebuild -resolvePackageDependencies \
 echo ">>> Stripping extended attributes (com.apple.quarantine et al.)..."
 xattr -cr . 2>/dev/null || true
 xattr -cr ./build 2>/dev/null || true
+
+# Clean only the compiled products (./build/Build) — keep the downloaded
+# SPM checkouts in ./build/SourcePackages so we don't re-fetch Realm (~100MB).
+# This guarantees we never reuse a half-built framework left behind by a
+# previous codesign failure (symptom: "no such file" for the Mach-O binary
+# inside an otherwise-valid-looking RealmSwift.framework bundle).
+echo ">>> Removing stale compiled products while preserving SPM checkouts..."
+rm -rf ./build/Build ./build/Intermediates.noindex
 
 xcodebuild test \
     -project "$PROJECT" \
