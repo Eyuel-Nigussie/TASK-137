@@ -108,6 +108,14 @@ echo ">>> Stripping extended attributes (com.apple.quarantine et al.)..."
 xattr -cr . 2>/dev/null || true
 xattr -cr ./build 2>/dev/null || true
 
+# Clean only the compiled products (./build/Build) — keep the downloaded
+# SPM checkouts in ./build/SourcePackages so we don't re-fetch Realm (~100MB).
+# This guarantees we never reuse a half-built framework left behind by a
+# previous codesign failure (symptom: "no such file" for the Mach-O binary
+# inside an otherwise-valid-looking RealmSwift.framework bundle).
+echo ">>> Removing stale compiled products while preserving SPM checkouts..."
+rm -rf ./build/Build ./build/Intermediates.noindex
+
 xcodebuild \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
