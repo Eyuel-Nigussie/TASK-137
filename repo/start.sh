@@ -1,183 +1,19 @@
-#!/usr/bin/env bash
-# Builds and launches the RailCommerce iOS app on an iOS Simulator.
-#
-# Requirements:
-#   * macOS host (iOS apps only build/run on macOS).
-#   * Xcode installed with at least one iOS Simulator runtime.
-#
-# Usage: ./start.sh
-#   Environment overrides:
-#     SIM_NAME    Preferred simulator device name (default: iPhone 15).
-#                 If the preferred device is not installed, falls back to
-#                 the first already-booted iOS simulator, then to the first
-#                 available iPhone device reported by `xcrun simctl list`.
+#!/bin/bash
 set -euo pipefail
 
-PLATFORM="$(uname -s)"
-if [[ "$PLATFORM" != "Darwin" ]]; then
-    echo "Platform: $PLATFORM"
-    echo "Skipping: this is an iOS app. Building and launching requires macOS"
-    echo "          + Xcode + iOS Simulator, none of which are available on"
-    echo "          $PLATFORM. Exiting cleanly (exit 0) so CI on non-Mac"
-    echo "          hosts is not marked as failed — there is no iOS toolchain"
-    echo "          to invoke here. Run on macOS to build and launch the app."
+echo "=== RailCommerce — Start App ==="
+echo ""
+
+# This is a native iOS project — the simulator requires macOS with Xcode.
+if [[ "$(uname)" != "Darwin" ]]; then
+    echo "Platform not supported: $(uname)"
+    echo ""
+    echo "Running the app requires macOS with Xcode 16+ and at least one iOS"
+    echo "Simulator runtime installed. The iOS Simulator is only available on"
+    echo "macOS, so this script exits cleanly (exit 0) on non-Mac hosts."
     exit 0
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
-for tool in xcodebuild xcrun; do
-    if ! command -v "$tool" >/dev/null 2>&1; then
-        echo "Error: '$tool' not found on PATH."
-        echo "Install Xcode from the Mac App Store and run:"
-        echo "    sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
-        exit 1
-    fi
-done
-
-PROJECT="RailCommerceApp.xcodeproj"
-SCHEME="RailCommerceApp"
-CONFIGURATION="Debug"
-PREFERRED_SIM="${SIM_NAME:-iPhone 15}"
-
-# Extract the first UUID from a line like:
-#     iPhone 17 (D465F861-1089-4627-959D-F171163E503F) (Booted)
-extract_udid() {
-    sed -nE 's/.*\(([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12})\).*/\1/p' | head -1
-}
-
-pick_simulator() {
-    local preferred="$1"
-    local udid
-
-    # 1. Exact preferred device name, from available iOS runtimes.
-    udid=$(xcrun simctl list devices available \
-           | grep -E "^\s+${preferred} \(" \
-           | extract_udid)
-    if [[ -n "${udid:-}" ]]; then echo "$udid"; return 0; fi
-
-    # 2. First currently-booted simulator (runtime filter not required — if it
-    #    is booted and simctl reports it, it is usable).
-    udid=$(xcrun simctl list devices \
-           | grep "(Booted)" \
-           | extract_udid)
-    if [[ -n "${udid:-}" ]]; then echo "$udid"; return 0; fi
-
-    # 3. Any available iPhone device.
-    udid=$(xcrun simctl list devices available \
-           | grep -E "^\s+iPhone " \
-           | extract_udid)
-    if [[ -n "${udid:-}" ]]; then echo "$udid"; return 0; fi
-
-    return 1
-}
-
-SIM_UDID="$(pick_simulator "$PREFERRED_SIM" || true)"
-if [[ -z "${SIM_UDID:-}" ]]; then
-    echo "Error: no iOS Simulator devices found."
-    echo "Open Xcode → Settings → Platforms and install an iOS runtime, or run:"
-    echo "    xcodebuild -downloadPlatform iOS"
-    exit 1
-fi
-
-echo ">>> Using simulator: $SIM_UDID"
-DESTINATION="platform=iOS Simulator,id=${SIM_UDID}"
-
-echo ">>> Building $SCHEME ($CONFIGURATION)..."
-# Simulator builds use ad-hoc signing ("-", "Sign to Run Locally") so they
-# work on fresh clones with no configured developer team. Fully disabling
-# signing would strip entitlements and break Keychain-backed runtime code
-# on the simulator, so we use "-" instead of "" and leave signing allowed.
-# CODE_SIGN_STYLE=Manual prevents Xcode from trying to contact Apple to
-# provision a team profile.
-#
-# We also pre-resolve SPM packages and strip extended attributes from the
-# working tree + derived data directory. macOS Gatekeeper / Spotlight /
-# iCloud stamp files under ~/Documents with xattrs (com.apple.quarantine,
-# com.apple.provenance, com.apple.FinderInfo) that propagate into SPM
-# framework bundles. `codesign` rejects them with "resource fork, Finder
-# information, or similar detritus not allowed". On Documents-folder
-# clones these xattrs re-acquire themselves during the build, so we run
-# xcodebuild inside a retry loop that re-strips and re-attempts up to 3
-# times. If it's still failing after that, the root cause is almost
-# certainly the clone location — move the repo out of ~/Documents (e.g.
-# to ~/Developer or ~/Projects) and the problem disappears.
-echo ">>> Pre-resolving SPM packages so xattrs can be stripped before signing..."
-xcodebuild -resolvePackageDependencies \
-    -project "$PROJECT" \
-    -scheme "$SCHEME" \
-    -derivedDataPath "./build" >/dev/null
-
-if [[ "$PWD" == "$HOME/Documents/"* ]]; then
-    echo ">>> Warning: this clone lives under ~/Documents."
-    echo "             macOS keeps re-adding xattrs to files here, which"
-    echo "             codesign rejects. If the build still fails after the"
-    echo "             retry loop, move the repo out of ~/Documents (e.g."
-    echo "             to ~/Developer) and re-run this script."
-fi
-
-strip_xattrs_and_clean_products() {
-    echo ">>> Stripping extended attributes (com.apple.quarantine et al.)..."
-    xattr -cr . 2>/dev/null || true
-    xattr -cr ./build 2>/dev/null || true
-    echo ">>> Removing stale compiled products while preserving SPM checkouts..."
-    rm -rf ./build/Build ./build/Intermediates.noindex
-}
-
-attempt=1
-max_attempts=3
-BUILD_STATUS=1
-while (( attempt <= max_attempts )); do
-    strip_xattrs_and_clean_products
-    echo ">>> Build attempt ${attempt}/${max_attempts}..."
-    if xcodebuild \
-            -project "$PROJECT" \
-            -scheme "$SCHEME" \
-            -configuration "$CONFIGURATION" \
-            -destination "$DESTINATION" \
-            -derivedDataPath "./build" \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            build; then
-        BUILD_STATUS=0
-        break
-    fi
-    echo ">>> Build attempt ${attempt} failed — re-stripping xattrs + retrying..."
-    attempt=$((attempt + 1))
-done
-if [[ "$BUILD_STATUS" -ne 0 ]]; then
-    echo
-    echo "Error: xcodebuild failed ${max_attempts} times."
-    if [[ "$PWD" == "$HOME/Documents/"* ]]; then
-        echo "Move this repo out of ~/Documents (e.g. to ~/Developer) and"
-        echo "re-run. macOS re-adds xattrs to files under Documents on every"
-        echo "write, which codesign refuses."
-    fi
-    exit 1
-fi
-
-APP_BUNDLE=$(find "./build/Build/Products" -maxdepth 3 -name "$SCHEME.app" -type d | head -1)
-if [[ -z "${APP_BUNDLE:-}" || ! -d "$APP_BUNDLE" ]]; then
-    echo "Error: could not locate built app bundle under ./build/Build/Products."
-    exit 1
-fi
-echo ">>> Built app: $APP_BUNDLE"
-
-BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_BUNDLE/Info.plist")
-echo ">>> Bundle identifier: $BUNDLE_ID"
-
-echo ">>> Booting Simulator.app (idempotent)..."
-open -a Simulator
-xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
-xcrun simctl bootstatus "$SIM_UDID" -b >/dev/null
-
-echo ">>> Installing app..."
-xcrun simctl install "$SIM_UDID" "$APP_BUNDLE"
-
-echo ">>> Launching $BUNDLE_ID..."
-xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-
-echo ">>> RailCommerce is running on simulator $SIM_UDID."
+# Launch the app locally on the iOS Simulator.
+cd "$(dirname "$0")"
+./scripts/run.sh
