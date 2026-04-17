@@ -139,7 +139,9 @@ final class CoverageBoostTests: XCTestCase {
     }
 
     /// Covers: `CheckoutService.submit` seats-without-inventory guard
-    /// (Services/CheckoutService.swift:174-175).
+    /// (Services/CheckoutService.swift:174-175). Asserts the dedicated
+    /// `.seatInventoryUnavailable` error instead of the old reused
+    /// `.noShipping` — matches audit report-1 Medium #4 fix.
     func testCheckoutWithSeatsButNoInventoryThrows() throws {
         let clock = FakeClock()
         let svc = CheckoutService(clock: clock, keychain: InMemoryKeychain())
@@ -155,11 +157,15 @@ final class CoverageBoostTests: XCTestCase {
                                             address: addr, shipping: ship,
                                             invoiceNotes: "", actingUser: customer,
                                             seats: [seat],
-                                            seatInventory: nil))
+                                            seatInventory: nil)) { err in
+            XCTAssertEqual(err as? CheckoutError, .seatInventoryUnavailable,
+                           "missing seat inventory must surface as a dedicated error, not .noShipping")
+        }
     }
 
     /// Covers: `CheckoutService.submit` seats-already-held-by-someone-else
-    /// branch (Services/CheckoutService.swift:187).
+    /// branch. Asserts that the typed `.seatUnavailable` error is surfaced
+    /// instead of leaking the lower-level `SeatError` to the UI.
     func testCheckoutSeatHeldByAnotherUserRejected() throws {
         let clock = FakeClock()
         let inv = SeatInventoryService(clock: clock)
@@ -180,7 +186,43 @@ final class CoverageBoostTests: XCTestCase {
                                             cart: cart, discounts: [],
                                             address: addr, shipping: ship,
                                             invoiceNotes: "", actingUser: customer,
-                                            seats: [seat], seatInventory: inv))
+                                            seats: [seat], seatInventory: inv)) { err in
+            XCTAssertEqual(err as? CheckoutError, .seatUnavailable,
+                           "seat conflict must surface as .seatUnavailable")
+        }
+    }
+
+    /// Covers: sales-agent-on-behalf flow + seat atomic reserve+confirm
+    /// end-to-end. A sales agent submits an order on behalf of a customer;
+    /// every requested seat transitions from .available to .sold within the
+    /// single `submit` call and the order is snapshotted.
+    func testSalesAgentSubmitsOnBehalfWithSeatsEndToEnd() throws {
+        let clock = FakeClock()
+        let inv = SeatInventoryService(clock: clock)
+        let svc = CheckoutService(clock: clock, keychain: InMemoryKeychain())
+        let cart = Cart(catalog: checkoutCatalog())
+        try cart.add(skuId: "t1", quantity: 1)
+
+        let seat = SeatKey(trainId: "NE1", date: "2024-06-01", segmentId: "NY-BOS",
+                           seatClass: .economy, seatNumber: "12A")
+        inv.registerSeat(seat)
+        XCTAssertEqual(inv.state(seat), .available)
+
+        let agent = User(id: "agent1", displayName: "Sam", role: .salesAgent)
+        let addr = USAddress(id: "a", recipient: "A", line1: "1",
+                             city: "NYC", state: .NY, zip: "10001")
+        let ship = ShippingTemplate(id: "std", name: "Std", feeCents: 500, etaDays: 3)
+        let snap = try svc.submit(orderId: "O-agent",
+                                  userId: customer.id,
+                                  cart: cart, discounts: [],
+                                  address: addr, shipping: ship,
+                                  invoiceNotes: "agent sold",
+                                  actingUser: agent,
+                                  seats: [seat], seatInventory: inv)
+        XCTAssertEqual(snap.userId, customer.id,
+                       "on-behalf sale: snapshot userId must be the customer, not the agent")
+        XCTAssertEqual(inv.state(seat), .sold,
+                       "the seat must be atomically reserved+confirmed by checkout")
     }
 
     /// Covers: `CheckoutService.submit` persistence-failure path

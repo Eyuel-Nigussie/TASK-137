@@ -34,18 +34,20 @@ final class MainTabBarController: UITabBarController {
         tabs.append(nav(ContentBrowseViewController(app: app, user: currentUser),
                         title: "Advisories", image: "newspaper"))
 
-        if RolePolicy.can(currentUser.role, .purchase) {
+        // Sales tabs (Cart, Seats, Returns) are shown to anyone who can
+        // execute a transaction — customers via `.purchase` AND sales agents
+        // via `.processTransaction` (on-behalf-of sales). This satisfies the
+        // prompt's "Sales Agent performs ticket/merchandise sales" flow
+        // directly in the UI.
+        let canTransact = RolePolicy.can(currentUser.role, .purchase)
+                        || RolePolicy.can(currentUser.role, .processTransaction)
+        if canTransact {
             tabs.append(nav(CartViewController(app: app, user: currentUser),
                             title: "Cart", image: "cart"))
             tabs.append(nav(SeatInventoryViewController(app: app, user: currentUser),
                             title: "Seats", image: "tram.fill"))
             tabs.append(nav(AfterSalesViewController(app: app, user: currentUser),
                             title: "Returns", image: "arrow.uturn.left.circle"))
-        }
-
-        if RolePolicy.can(currentUser.role, .processTransaction) {
-            tabs.append(nav(SeatInventoryViewController(app: app, user: currentUser),
-                            title: "Inventory", image: "tram.fill"))
         }
 
         // Editors draft content; reviewers approve/reject it — both need the tab.

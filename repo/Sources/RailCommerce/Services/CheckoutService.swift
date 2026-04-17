@@ -76,6 +76,12 @@ public enum CheckoutError: Error, Equatable {
     /// is not a privileged agent permitted to submit on behalf of other customers.
     case identityMismatch
     case persistenceFailed
+    /// Seats were requested but no `SeatInventoryService` was wired into the
+    /// call — the checkout cannot transactionally reserve+confirm them.
+    case seatInventoryUnavailable
+    /// One or more requested seats could not be reserved or confirmed (already
+    /// reserved by someone else, sold, unknown, or otherwise conflicted).
+    case seatUnavailable
 }
 
 public final class CheckoutService {
@@ -172,7 +178,7 @@ public final class CheckoutService {
         if !seats.isEmpty {
             guard let inventory = seatInventory else {
                 logger.error(.checkout, "submit seats provided but no inventory wired orderId=\(orderId)")
-                throw CheckoutError.noShipping   // reused: missing required dep
+                throw CheckoutError.seatInventoryUnavailable
             }
             do {
                 try inventory.atomic {
@@ -191,6 +197,12 @@ public final class CheckoutService {
                         try inventory.confirm(seat, holderId: userId, actingUser: actingUser)
                     }
                 }
+            } catch let seatError as SeatError {
+                // Map any seat-level error to a single checkout-level error so
+                // the UI can present a coherent "seat unavailable" message and
+                // the caller can distinguish this from unrelated failures.
+                logger.warn(.checkout, "submit seat transaction failed orderId=\(orderId) err=\(seatError)")
+                throw CheckoutError.seatUnavailable
             } catch {
                 logger.warn(.checkout, "submit seat transaction failed orderId=\(orderId) err=\(error)")
                 throw error

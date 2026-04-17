@@ -158,7 +158,49 @@ final class ContentPublishingViewController: UITableViewController {
     // MARK: - Editor actions
 
     @objc private func newDraft() {
-        let alert = UIAlertController(title: "New Draft", message: "Enter title",
+        // Three-step flow: pick kind → pick taxonomy region → enter title.
+        pickContentKind { [weak self] kind in
+            self?.pickTaxonomyRegion { region in
+                self?.promptTitleAndCreate(kind: kind,
+                                           tag: TaxonomyTag(region: region))
+            }
+        }
+    }
+
+    private func pickContentKind(_ completion: @escaping (ContentKind) -> Void) {
+        let sheet = UIAlertController(title: "Content kind",
+                                      message: "Pick the content type to author.",
+                                      preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "Travel advisory", style: .default) { _ in
+            completion(.travelAdvisory)
+        })
+        sheet.addAction(UIAlertAction(title: "Onboard offer", style: .default) { _ in
+            completion(.onboardOffer)
+        })
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(sheet, animated: true)
+    }
+
+    private func pickTaxonomyRegion(_ completion: @escaping (Region?) -> Void) {
+        let sheet = UIAlertController(title: "Taxonomy region",
+                                      message: "Scope this item to a region (or all regions).",
+                                      preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "All regions", style: .default) { _ in
+            completion(nil)
+        })
+        for region in Region.allCases {
+            sheet.addAction(UIAlertAction(title: region.rawValue.capitalized,
+                                          style: .default) { _ in
+                completion(region)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(sheet, animated: true)
+    }
+
+    private func promptTitleAndCreate(kind: ContentKind, tag: TaxonomyTag) {
+        let alert = UIAlertController(title: "New \(kind == .travelAdvisory ? "Advisory" : "Offer")",
+                                      message: "Enter title",
                                       preferredStyle: .alert)
         alert.addTextField { $0.placeholder = "Content title" }
         alert.addAction(UIAlertAction(title: "Create", style: .default) { [weak self] _ in
@@ -166,9 +208,9 @@ final class ContentPublishingViewController: UITableViewController {
             do {
                 _ = try self.app.publishing.createDraft(
                     id: UUID().uuidString,
-                    kind: .travelAdvisory,
+                    kind: kind,
                     title: title,
-                    tag: TaxonomyTag(),
+                    tag: tag,
                     body: "Draft content.",
                     editorId: self.user.id,
                     actingUser: self.user

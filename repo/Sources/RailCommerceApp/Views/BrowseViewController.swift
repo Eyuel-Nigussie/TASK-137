@@ -167,7 +167,12 @@ final class BrowseViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        guard RolePolicy.can(user.role, .purchase) else { return }
+        // Customers (.purchase) add to their own cart; sales agents
+        // (.processTransaction) add to the cart while selling on behalf of a
+        // customer. CheckoutService enforces identity binding at submit time.
+        let canAddToCart = RolePolicy.can(user.role, .purchase)
+                         || RolePolicy.can(user.role, .processTransaction)
+        guard canAddToCart else { return }
         let sku = skus[indexPath.row]
         let alert = UIAlertController(title: sku.title,
                                       message: "Add to cart?",

@@ -137,8 +137,22 @@ final class RoleViewControllerMatrixTests: XCTestCase {
     func testAfterSalesCaseThreadViewControllerLoads() throws {
         let app = makeApp()
         let customer = User(id: "c1", displayName: "C", role: .customer)
-        let req = AfterSalesRequest(id: "R1", orderId: "O1", kind: .refundOnly,
-                                    reason: .changedMind,
+        // Seed a real checkout order so the after-sales ownership validator
+        // (`checkout.order(orderId, ownedBy: userId)`) accepts the request.
+        let cart = app.cart(forUser: customer.id)
+        try cart.add(skuId: "t1", quantity: 1)
+        let addr = USAddress(id: "a1", recipient: "C", line1: "1 Main",
+                             city: "NYC", state: .NY, zip: "10001")
+        _ = try app.addressBook.save(addr, ownedBy: customer.id)
+        let ship = ShippingTemplate(id: "std", name: "Std", feeCents: 500, etaDays: 3)
+        let snap = try app.checkout.submit(orderId: "O-thread",
+                                           userId: customer.id,
+                                           cart: cart, discounts: [],
+                                           address: addr, shipping: ship,
+                                           invoiceNotes: "",
+                                           actingUser: customer)
+        let req = AfterSalesRequest(id: "R1", orderId: snap.orderId,
+                                    kind: .refundOnly, reason: .changedMind,
                                     createdAt: Date(),
                                     serviceDate: Date(),
                                     amountCents: 500)

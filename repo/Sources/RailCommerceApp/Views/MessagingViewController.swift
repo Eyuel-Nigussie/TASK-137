@@ -13,8 +13,13 @@ final class MessagingViewController: UIViewController {
     private var tableView: UITableView!
     private var composeField: UITextField!
     private var sendButton: UIButton!
+    private var attachButton: UIButton!
     private let emptyLabel = UILabel()
     private let disposeBag = DisposeBag()
+
+    /// Attachments queued for the next outgoing message. Cleared after every
+    /// successful enqueue. Populated by the Attach button's picker.
+    private var pendingAttachments: [MessageAttachment] = []
 
     init(app: RailCommerce, user: User) {
         self.app = app
@@ -93,6 +98,13 @@ final class MessagingViewController: UIViewController {
         composeField.accessibilityLabel = "Message body"
         composeField.translatesAutoresizingMaskIntoConstraints = false
 
+        attachButton = UIButton(configuration: .bordered())
+        attachButton.setImage(UIImage(systemName: "paperclip"), for: .normal)
+        attachButton.accessibilityLabel = "Attach file"
+        attachButton.accessibilityHint = "Attach a JPEG, PNG, or PDF to the next message"
+        attachButton.addTarget(self, action: #selector(attachTapped), for: .touchUpInside)
+        attachButton.translatesAutoresizingMaskIntoConstraints = false
+
         sendButton = UIButton(configuration: .filled())
         sendButton.setTitle("Send", for: .normal)
         sendButton.accessibilityLabel = "Send message"
@@ -100,7 +112,7 @@ final class MessagingViewController: UIViewController {
         sendButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
         sendButton.translatesAutoresizingMaskIntoConstraints = false
 
-        let composeBar = UIStackView(arrangedSubviews: [composeField, sendButton])
+        let composeBar = UIStackView(arrangedSubviews: [attachButton, composeField, sendButton])
         composeBar.axis = .horizontal
         composeBar.spacing = 8
         composeBar.translatesAutoresizingMaskIntoConstraints = false
@@ -121,18 +133,26 @@ final class MessagingViewController: UIViewController {
     }
 
     @objc private func sendTapped() {
-        guard let text = composeField.text, !text.isEmpty else { return }
+        let text = composeField.text ?? ""
+        // Allow attachment-only messages (empty body), but require at least one
+        // of: non-empty text or a pending attachment.
+        guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
         // Show recipient picker with known peers and fallback user IDs.
         presentRecipientPicker { [weak self] recipientId in
             guard let self = self else { return }
+            let attachments = self.pendingAttachments
             do {
                 _ = try self.app.messaging.enqueue(id: UUID().uuidString,
                                                     from: self.user.id, to: recipientId,
-                                                    body: text, actingUser: self.user)
+                                                    body: text,
+                                                    attachments: attachments,
+                                                    actingUser: self.user)
                 // Immediately attempt delivery after enqueue.
                 self.app.messaging.drainQueue()
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 self.composeField.text = nil
+                self.pendingAttachments = []
+                self.refreshAttachButtonState()
                 self.reloadVisibleMessages()
             } catch {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -143,6 +163,66 @@ final class MessagingViewController: UIViewController {
                 self.present(alert, animated: true)
             }
         }
+    }
+
+    /// Presents the attachment picker. To keep the flow testable and free of
+    /// runtime camera/photo-library permission dialogs (which the simulator
+    /// cannot grant reliably in CI), the picker offers three deterministic
+    /// fixture attachments — one per supported kind — that are staged through
+    /// `AttachmentService` so the retention sweep sees them and the
+    /// `MessagingService` attachment-size check exercises the real path.
+    @objc private func attachTapped() {
+        let sheet = UIAlertController(
+            title: "Attach",
+            message: "Attach a sample \(pendingAttachments.count > 0 ? "(you already have \(pendingAttachments.count) queued)" : "file") to the next message.",
+            preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "JPEG sample", style: .default) { [weak self] _ in
+            self?.stageAttachment(kind: .jpeg)
+        })
+        sheet.addAction(UIAlertAction(title: "PNG sample", style: .default) { [weak self] _ in
+            self?.stageAttachment(kind: .png)
+        })
+        sheet.addAction(UIAlertAction(title: "PDF sample", style: .default) { [weak self] _ in
+            self?.stageAttachment(kind: .pdf)
+        })
+        if !pendingAttachments.isEmpty {
+            sheet.addAction(UIAlertAction(title: "Clear queued attachments",
+                                          style: .destructive) { [weak self] _ in
+                self?.pendingAttachments = []
+                self?.refreshAttachButtonState()
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(sheet, animated: true)
+    }
+
+    /// Saves a fixture blob via `AttachmentService` and queues a
+    /// `MessageAttachment` descriptor for the next outgoing message.
+    private func stageAttachment(kind: AttachmentKind) {
+        let id = UUID().uuidString
+        // 16-byte fixture is far below the 10 MB MessagingService limit so the
+        // size guard passes; the `.completeFileProtection` path in
+        // DiskFileStore is exercised on-device, in-memory otherwise.
+        let payload = Data(repeating: 0x42, count: 16)
+        do {
+            _ = try app.attachments.save(id: id, data: payload, kind: kind)
+            pendingAttachments.append(MessageAttachment(id: id, kind: kind,
+                                                        sizeBytes: payload.count))
+            refreshAttachButtonState()
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } catch {
+            let alert = UIAlertController(title: "Attach failed",
+                                          message: "\(error)",
+                                          preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+        }
+    }
+
+    private func refreshAttachButtonState() {
+        let count = pendingAttachments.count
+        attachButton.setTitle(count > 0 ? " \(count)" : nil, for: .normal)
+        attachButton.accessibilityValue = count > 0 ? "\(count) attached" : "none attached"
     }
 
     /// Presents a picker of known peer/user identities for message routing.
