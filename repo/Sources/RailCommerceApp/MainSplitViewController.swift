@@ -74,17 +74,21 @@ final class FeatureSidebarViewController: UITableViewController {
                     factory: { ContentBrowseViewController(app: app, user: currentUser) })
         ]
 
-        if RolePolicy.can(currentUser.role, .purchase) {
+        // Transaction-capable roles get Cart / Seats / Returns. This matches
+        // the `canTransact` logic in `MainTabBarController` so the iPad
+        // split-view shell is not a stricter shell than the iPhone tab-bar
+        // shell — Sales Agents (.processTransaction) must be able to execute
+        // an on-behalf sale on iPad too, which is exactly what the prompt
+        // requires.
+        let canTransact = RolePolicy.can(currentUser.role, .purchase)
+                        || RolePolicy.can(currentUser.role, .processTransaction)
+        if canTransact {
             features.append(Feature(title: "Cart", systemImage: "cart",
                                     factory: { CartViewController(app: app, user: currentUser) }))
             features.append(Feature(title: "Seats", systemImage: "tram.fill",
                                     factory: { SeatInventoryViewController(app: app, user: currentUser) }))
             features.append(Feature(title: "Returns", systemImage: "arrow.uturn.left.circle",
                                     factory: { AfterSalesViewController(app: app, user: currentUser) }))
-        }
-        if RolePolicy.can(currentUser.role, .processTransaction) {
-            features.append(Feature(title: "Inventory", systemImage: "tram.fill",
-                                    factory: { SeatInventoryViewController(app: app, user: currentUser) }))
         }
         if RolePolicy.can(currentUser.role, .draftContent) || RolePolicy.can(currentUser.role, .publishContent) {
             features.append(Feature(title: "Content", systemImage: "doc.text",

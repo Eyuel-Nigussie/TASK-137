@@ -158,11 +158,22 @@ final class ContentPublishingViewController: UITableViewController {
     // MARK: - Editor actions
 
     @objc private func newDraft() {
-        // Three-step flow: pick kind → pick taxonomy region → enter title.
+        // Five-step flow: kind → region → theme → rider type → title. Every
+        // facet has an explicit "any" option so an author can scope broadly
+        // without being forced into an arbitrary value. The full
+        // `TaxonomyTag(region:theme:riderType:)` is persisted so customer
+        // browse filters receive every facet.
         pickContentKind { [weak self] kind in
             self?.pickTaxonomyRegion { region in
-                self?.promptTitleAndCreate(kind: kind,
-                                           tag: TaxonomyTag(region: region))
+                self?.pickTaxonomyTheme { theme in
+                    self?.pickTaxonomyRiderType { riderType in
+                        self?.promptTitleAndCreate(
+                            kind: kind,
+                            tag: TaxonomyTag(region: region,
+                                             theme: theme,
+                                             riderType: riderType))
+                    }
+                }
             }
         }
     }
@@ -182,16 +193,50 @@ final class ContentPublishingViewController: UITableViewController {
     }
 
     private func pickTaxonomyRegion(_ completion: @escaping (Region?) -> Void) {
-        let sheet = UIAlertController(title: "Taxonomy region",
+        let sheet = UIAlertController(title: "Taxonomy — region",
                                       message: "Scope this item to a region (or all regions).",
                                       preferredStyle: .actionSheet)
-        sheet.addAction(UIAlertAction(title: "All regions", style: .default) { _ in
+        sheet.addAction(UIAlertAction(title: "Any region", style: .default) { _ in
             completion(nil)
         })
         for region in Region.allCases {
             sheet.addAction(UIAlertAction(title: region.rawValue.capitalized,
                                           style: .default) { _ in
                 completion(region)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(sheet, animated: true)
+    }
+
+    private func pickTaxonomyTheme(_ completion: @escaping (Theme?) -> Void) {
+        let sheet = UIAlertController(title: "Taxonomy — theme",
+                                      message: "Tag the theme (or leave as any).",
+                                      preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "Any theme", style: .default) { _ in
+            completion(nil)
+        })
+        for theme in Theme.allCases {
+            sheet.addAction(UIAlertAction(title: theme.rawValue.capitalized,
+                                          style: .default) { _ in
+                completion(theme)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(sheet, animated: true)
+    }
+
+    private func pickTaxonomyRiderType(_ completion: @escaping (RiderType?) -> Void) {
+        let sheet = UIAlertController(title: "Taxonomy — rider type",
+                                      message: "Tag the rider audience (or leave as any).",
+                                      preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "Any rider type", style: .default) { _ in
+            completion(nil)
+        })
+        for riderType in RiderType.allCases {
+            sheet.addAction(UIAlertAction(title: riderType.rawValue.capitalized,
+                                          style: .default) { _ in
+                completion(riderType)
             })
         }
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))

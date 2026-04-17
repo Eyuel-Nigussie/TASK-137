@@ -35,6 +35,7 @@
 		BB000107 /* CartBrowseCheckoutFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000007 /* CartBrowseCheckoutFlowTests.swift */; };
 		BB000109 /* SystemKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000009 /* SystemKeychainTests.swift */; };
 		BB000111 /* RoleViewControllerMatrixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000011 /* RoleViewControllerMatrixTests.swift */; };
+		BB000113 /* SplitViewRoleParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000013 /* SplitViewRoleParityTests.swift */; };
 		BB00010B /* RailCommerce in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000B /* RailCommerce */; };
 /* End PBXBuildFile section */
 
@@ -75,6 +76,7 @@
 		BB000007 /* CartBrowseCheckoutFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartBrowseCheckoutFlowTests.swift; sourceTree = "<group>"; };
 		BB000009 /* SystemKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemKeychainTests.swift; sourceTree = "<group>"; };
 		BB000011 /* RoleViewControllerMatrixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleViewControllerMatrixTests.swift; sourceTree = "<group>"; };
+		BB000013 /* SplitViewRoleParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitViewRoleParityTests.swift; sourceTree = "<group>"; };
 		BB000301 /* RailCommerceAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RailCommerceAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -177,6 +179,7 @@
 				BB000007 /* CartBrowseCheckoutFlowTests.swift */,
 				BB000005 /* LoginViewControllerTests.swift */,
 				BB000011 /* RoleViewControllerMatrixTests.swift */,
+				BB000013 /* SplitViewRoleParityTests.swift */,
 				BB000009 /* SystemKeychainTests.swift */,
 				BB000003 /* SystemProvidersTests.swift */,
 			);
@@ -316,6 +319,7 @@
 				BB000107 /* CartBrowseCheckoutFlowTests.swift in Sources */,
 				BB000105 /* LoginViewControllerTests.swift in Sources */,
 				BB000111 /* RoleViewControllerMatrixTests.swift in Sources */,
+				BB000113 /* SplitViewRoleParityTests.swift in Sources */,
 				BB000109 /* SystemKeychainTests.swift in Sources */,
 				BB000103 /* SystemProvidersTests.swift in Sources */,
 			);
