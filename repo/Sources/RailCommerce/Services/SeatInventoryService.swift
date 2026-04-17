@@ -145,6 +145,15 @@ public final class SeatInventoryService {
             logger.warn(.inventory, "reserve forbidden role=\(actingUser.role.rawValue)")
             throw AuthorizationError.forbidden(required: .purchase)
         }
+        // Object-level identity binding — mirrors `release`. A non-
+        // `.processTransaction` caller can only reserve under their own
+        // `holderId`. Sales agents with `.processTransaction` may reserve
+        // on behalf of any customer id (the on-behalf-of-sale flow).
+        if !RolePolicy.can(actingUser.role, .processTransaction)
+           && actingUser.id != holderId {
+            logger.warn(.inventory, "reserve identityMismatch actor=\(actingUser.id) holder=\(holderId)")
+            throw SeatError.wrongHolder
+        }
         sweepExpired()
         guard let s = states[key] else { throw SeatError.unknownSeat }
         guard s == .available else { throw SeatError.notAvailable }
@@ -214,6 +223,14 @@ public final class SeatInventoryService {
            || RolePolicy.can(actingUser.role, .processTransaction) else {
             logger.warn(.inventory, "confirm forbidden role=\(actingUser.role.rawValue)")
             throw AuthorizationError.forbidden(required: .purchase)
+        }
+        // Object-level identity binding — mirrors `release` / `reserve`.
+        // A non-`.processTransaction` caller can only confirm a reservation
+        // under their own `holderId`. Sales agents may confirm on behalf.
+        if !RolePolicy.can(actingUser.role, .processTransaction)
+           && actingUser.id != holderId {
+            logger.warn(.inventory, "confirm identityMismatch actor=\(actingUser.id) holder=\(holderId)")
+            throw SeatError.wrongHolder
         }
         sweepExpired()
         guard let res = reservations[key] else { throw SeatError.notReserved }

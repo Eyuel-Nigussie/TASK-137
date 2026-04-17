@@ -16,10 +16,12 @@ final class SeatInventoryServiceTests: XCTestCase {
 
     func testReserveAndConfirm() throws {
         let (svc, _, seat) = makeService()
-        let res = try svc.reserve(seat, holderId: "H", actingUser: customer)
+        // Sales agent on-behalf-of customer "H"; .processTransaction bypasses
+        // the holder-identity binding, matching the audit report-2 fix.
+        let res = try svc.reserve(seat, holderId: "H", actingUser: salesAgent)
         XCTAssertEqual(res.holderId, "H")
         XCTAssertEqual(svc.state(seat), .reserved)
-        try svc.confirm(seat, holderId: "H", actingUser: customer)
+        try svc.confirm(seat, holderId: "H", actingUser: salesAgent)
         XCTAssertEqual(svc.state(seat), .sold)
     }
 
@@ -27,22 +29,22 @@ final class SeatInventoryServiceTests: XCTestCase {
         let (svc, _, _) = makeService()
         let unknown = SeatKey(trainId: "?", date: "?", segmentId: "?",
                               seatClass: .economy, seatNumber: "?")
-        XCTAssertThrowsError(try svc.reserve(unknown, holderId: "H", actingUser: customer)) { err in
+        XCTAssertThrowsError(try svc.reserve(unknown, holderId: "H", actingUser: salesAgent)) { err in
             XCTAssertEqual(err as? SeatError, .unknownSeat)
         }
     }
 
     func testReserveRejectsNonAvailable() throws {
         let (svc, _, seat) = makeService()
-        try svc.reserve(seat, holderId: "H1", actingUser: customer)
-        XCTAssertThrowsError(try svc.reserve(seat, holderId: "H2", actingUser: customer)) { err in
+        try svc.reserve(seat, holderId: "H1", actingUser: salesAgent)
+        XCTAssertThrowsError(try svc.reserve(seat, holderId: "H2", actingUser: salesAgent)) { err in
             XCTAssertEqual(err as? SeatError, .notAvailable)
         }
     }
 
     func testReservationExpiresAfter15Minutes() throws {
         let (svc, clock, seat) = makeService()
-        try svc.reserve(seat, holderId: "H", actingUser: customer)
+        try svc.reserve(seat, holderId: "H", actingUser: salesAgent)
         clock.advance(by: 16 * 60)
         XCTAssertEqual(svc.state(seat), .available)
         XCTAssertNil(svc.reservation(seat))
@@ -107,15 +109,18 @@ final class SeatInventoryServiceTests: XCTestCase {
 
     func testConfirmWrongHolder() throws {
         let (svc, _, seat) = makeService()
-        try svc.reserve(seat, holderId: "H", actingUser: customer)
-        XCTAssertThrowsError(try svc.confirm(seat, holderId: "OTHER", actingUser: customer)) { err in
+        // Sales agent reserves on behalf of "H"; attempting to confirm with
+        // a different holder still surfaces .wrongHolder on the reservation
+        // match, independent of the identity-binding guard.
+        try svc.reserve(seat, holderId: "H", actingUser: salesAgent)
+        XCTAssertThrowsError(try svc.confirm(seat, holderId: "OTHER", actingUser: salesAgent)) { err in
             XCTAssertEqual(err as? SeatError, .wrongHolder)
         }
     }
 
     func testConfirmWithoutReservation() {
         let (svc, _, seat) = makeService()
-        XCTAssertThrowsError(try svc.confirm(seat, holderId: "H", actingUser: customer)) { err in
+        XCTAssertThrowsError(try svc.confirm(seat, holderId: "H", actingUser: salesAgent)) { err in
             XCTAssertEqual(err as? SeatError, .notReserved)
         }
     }
@@ -123,7 +128,7 @@ final class SeatInventoryServiceTests: XCTestCase {
     func testAtomicRollsBackOnFailure() {
         let (svc, _, seat) = makeService()
         XCTAssertThrowsError(try svc.atomic {
-            _ = try svc.reserve(seat, holderId: "H", actingUser: customer)
+            _ = try svc.reserve(seat, holderId: "H", actingUser: salesAgent)
             throw SeatError.notAvailable
         })
         XCTAssertEqual(svc.state(seat), .available)
@@ -133,7 +138,7 @@ final class SeatInventoryServiceTests: XCTestCase {
     func testAtomicSucceeds() throws {
         let (svc, _, seat) = makeService()
         try svc.atomic {
-            _ = try svc.reserve(seat, holderId: "H", actingUser: customer)
+            _ = try svc.reserve(seat, holderId: "H", actingUser: salesAgent)
         }
         XCTAssertEqual(svc.state(seat), .reserved)
     }
@@ -141,7 +146,7 @@ final class SeatInventoryServiceTests: XCTestCase {
     func testSnapshotAndRollback() throws {
         let (svc, _, seat) = makeService()
         try svc.snapshot(date: "2024-01-01")
-        try svc.reserve(seat, holderId: "H", actingUser: customer)
+        try svc.reserve(seat, holderId: "H", actingUser: salesAgent)
         XCTAssertEqual(svc.state(seat), .reserved)
         try svc.rollback(to: "2024-01-01")
         XCTAssertEqual(svc.state(seat), .available)

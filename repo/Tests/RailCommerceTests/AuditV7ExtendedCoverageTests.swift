@@ -632,9 +632,11 @@ final class AuditV7ExtendedCoverageTests: XCTestCase {
         XCTAssertNotNil(svc.lastSweepError)
 
         // Storage heals; the next sweep that actually mutates must clear the error.
-        // Reserve again, advance the clock past the new hold, then read to sweep.
+        // Reserve again (as customer c1 — identity-binding requires holder ==
+        // actingUser.id for non-`.processTransaction` roles), then advance the
+        // clock past the new hold, then read to sweep.
         store.failOnSave = false
-        _ = try svc.reserve(seat, holderId: "c2", actingUser: customer)
+        _ = try svc.reserve(seat, holderId: "c1", actingUser: customer)
         clock.advance(by: 16 * 60)
         _ = svc.state(seat)
         XCTAssertNil(svc.lastSweepError,

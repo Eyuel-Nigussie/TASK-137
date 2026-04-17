@@ -260,4 +260,73 @@ final class AuditReport2ClosureTests: XCTestCase {
         XCTAssertEqual(item.versions.first?.editedBy, editor.id,
                        "editedBy audit field must match the authenticated actingUser")
     }
+
+    // MARK: - Finding #1 (pass-#2): Seat reserve/confirm holder identity binding
+
+    private func seatServiceWithOneSeat() -> (SeatInventoryService, SeatKey) {
+        let svc = SeatInventoryService(clock: FakeClock())
+        let seat = SeatKey(trainId: "T1", date: "2024-01-01", segmentId: "A-B",
+                           seatClass: .economy, seatNumber: "1A")
+        svc.registerSeat(seat)
+        return (svc, seat)
+    }
+
+    /// A customer-role caller with id "c1" must NOT be able to reserve a seat
+    /// under any other holderId — otherwise they could mint reservations in
+    /// someone else's name, bypassing object-level authorization.
+    func testCustomerCannotReserveUnderDifferentHolderId() {
+        let (svc, seat) = seatServiceWithOneSeat()
+        XCTAssertThrowsError(try svc.reserve(seat, holderId: "someone-else",
+                                              actingUser: customer)) { err in
+            XCTAssertEqual(err as? SeatError, .wrongHolder,
+                           "non-agent caller must not reserve with a holderId that isn't their own")
+        }
+    }
+
+    /// A customer-role caller MUST be able to reserve a seat under their own
+    /// `holderId` (the normal self-purchase path).
+    func testCustomerCanReserveUnderOwnHolderId() throws {
+        let (svc, seat) = seatServiceWithOneSeat()
+        XCTAssertNoThrow(try svc.reserve(seat, holderId: customer.id,
+                                         actingUser: customer))
+    }
+
+    /// A sales agent (`.processTransaction`) MUST be able to reserve on behalf
+    /// of an arbitrary customer holderId — that's the point of the on-behalf
+    /// carve-out. The guard must only kick in for non-agent roles.
+    func testSalesAgentCanReserveOnBehalfOfAnyHolderId() throws {
+        let (svc, seat) = seatServiceWithOneSeat()
+        XCTAssertNoThrow(try svc.reserve(seat, holderId: "someone-else",
+                                         actingUser: agent))
+    }
+
+    /// Same identity-binding guard applies to `confirm`. A customer cannot
+    /// confirm a reservation they do not hold, even if the seat is reserved.
+    func testCustomerCannotConfirmUnderDifferentHolderId() throws {
+        let (svc, seat) = seatServiceWithOneSeat()
+        // Set up a reservation held by someone else via the agent on-behalf path.
+        _ = try svc.reserve(seat, holderId: "someone-else", actingUser: agent)
+        XCTAssertThrowsError(try svc.confirm(seat, holderId: "someone-else",
+                                              actingUser: customer)) { err in
+            XCTAssertEqual(err as? SeatError, .wrongHolder,
+                           "non-agent caller must not confirm a reservation under a holderId that isn't their own")
+        }
+    }
+
+    /// Customer confirming their own reservation must succeed.
+    func testCustomerCanConfirmOwnReservation() throws {
+        let (svc, seat) = seatServiceWithOneSeat()
+        _ = try svc.reserve(seat, holderId: customer.id, actingUser: customer)
+        XCTAssertNoThrow(try svc.confirm(seat, holderId: customer.id,
+                                         actingUser: customer))
+    }
+
+    /// Sales agent confirming on-behalf of any customer must succeed (the
+    /// seat-inventory counterpart of `CheckoutService`'s on-behalf flow).
+    func testSalesAgentCanConfirmOnBehalfOfAnyHolderId() throws {
+        let (svc, seat) = seatServiceWithOneSeat()
+        _ = try svc.reserve(seat, holderId: "someone-else", actingUser: agent)
+        XCTAssertNoThrow(try svc.confirm(seat, holderId: "someone-else",
+                                         actingUser: agent))
+    }
 }

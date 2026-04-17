@@ -75,19 +75,39 @@ final class MultipeerMessageTransport: NSObject, MessageTransport,
 
     func session(_ session: MCSession, didReceive data: Data,
                  fromPeer peerID: MCPeerID) {
-        guard let msg = try? JSONDecoder().decode(Message.self, from: data) else { return }
-        // Trust-boundary enforcement: the authenticated MCPeerID that actually
-        // sent this frame must match the `fromUserId` the payload claims. A
-        // malicious nearby device would otherwise be able to impersonate any
-        // user/staff id by crafting the JSON payload. Drop mismatched frames
-        // silently — they never reach `acceptInbound` in the service layer.
-        guard peerID.displayName == msg.fromUserId else {
-            NSLog("[RailCommerce] Rejecting spoofed inbound — peerID=\(peerID.displayName) claimed fromUserId=\(msg.fromUserId)")
+        guard let msg = decodeAndAuthorize(data: data, peerDisplayName: peerID.displayName) else {
             return
         }
         DispatchQueue.main.async { [weak self] in
             self?.receiveHandlers.forEach { $0(msg) }
         }
+    }
+
+    /// Decodes a raw inbound frame and enforces the sender trust boundary.
+    /// Returns `nil` if the frame is malformed OR the authenticated peer
+    /// display name does not match the payload's `fromUserId`.
+    ///
+    /// Exposed `internal` so the iOS test target can pin this exact
+    /// boundary without having to stand up a real `MCSession`.
+    /// A malicious nearby device would otherwise be able to impersonate any
+    /// user/staff id by crafting the JSON payload.
+    internal func decodeAndAuthorize(data: Data, peerDisplayName: String) -> Message? {
+        guard let msg = try? JSONDecoder().decode(Message.self, from: data) else { return nil }
+        guard Self.peerMatchesSender(peerDisplayName: peerDisplayName,
+                                     claimedSenderId: msg.fromUserId) else {
+            NSLog("[RailCommerce] Rejecting spoofed inbound — peerID=\(peerDisplayName) claimed fromUserId=\(msg.fromUserId)")
+            return nil
+        }
+        return msg
+    }
+
+    /// Pure comparator — `true` iff the MC peer's authenticated display name
+    /// equals the payload's claimed `fromUserId`. Broken out so unit tests
+    /// can exercise every combination without needing MultipeerConnectivity
+    /// at runtime.
+    static func peerMatchesSender(peerDisplayName: String,
+                                  claimedSenderId: String) -> Bool {
+        peerDisplayName == claimedSenderId
     }
 
     func session(_ session: MCSession, didReceive stream: InputStream,
