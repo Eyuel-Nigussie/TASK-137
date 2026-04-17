@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Runs the full RailCommerce XCTest suite locally via the Swift toolchain.
+# Runs the full RailCommerce XCTest suite locally via the Swift toolchain and
+# prints the coverage summary at the end.
 #
 # Requirements:
 #   * macOS host (the app targets iOS, and the Swift/Xcode toolchain is only
@@ -7,9 +8,10 @@
 #   * Swift toolchain (`swift`) available on PATH — typically supplied by
 #     Xcode Command Line Tools.
 #
-# This script is intentionally simple: one `swift test` invocation. If you
-# need a deterministic Linux CI image, see `Dockerfile` and build it with
-# `docker compose build`.
+# This script is intentionally simple: one `swift test --enable-code-coverage`
+# invocation followed by an `llvm-cov report` restricted to first-party source.
+# If you need a deterministic Linux CI image, see `Dockerfile` and build it
+# with `docker compose build`.
 set -euo pipefail
 
 PLATFORM="$(uname -s)"
@@ -29,5 +31,17 @@ if ! command -v swift >/dev/null 2>&1; then
     exit 1
 fi
 
-echo ">>> Running RailCommerce tests via 'swift test'..."
-swift test
+echo ">>> Running RailCommerce tests via 'swift test --enable-code-coverage'..."
+swift test --enable-code-coverage
+
+XCTEST_BIN=$(ls .build/debug/*.xctest/Contents/MacOS/* 2>/dev/null | head -1)
+PROFDATA=".build/debug/codecov/default.profdata"
+
+if [[ -x "${XCTEST_BIN:-}" && -f "$PROFDATA" ]]; then
+    echo
+    echo ">>> Code coverage (first-party source only)"
+    xcrun llvm-cov report "$XCTEST_BIN" \
+        -instr-profile="$PROFDATA" \
+        -ignore-filename-regex=".build|Tests|RailCommerceDemo" \
+        | tail -40
+fi

@@ -631,4 +631,83 @@ final class CoverageBoostTests: XCTestCase {
         let bogusPath = NSTemporaryDirectory() + "coverage-missing-\(UUID().uuidString).bin"
         XCTAssertThrowsError(try store.delete(at: bogusPath))
     }
+
+    // MARK: - Auto-synthesized Equatable coverage for value types
+
+    /// Exercises the auto-synthesized `==` on `TalentMatch` so the function
+    /// is not reported as 0-coverage by llvm-cov.
+    func testTalentMatchEquatable() {
+        let a = TalentMatch(resumeId: "r", score: 0.5, skillScore: 0.3,
+                            experienceScore: 0.1, certScore: 0.1,
+                            matchedSkills: ["swift"], matchedCertifications: [],
+                            explanation: "e")
+        let b = TalentMatch(resumeId: "r", score: 0.5, skillScore: 0.3,
+                            experienceScore: 0.1, certScore: 0.1,
+                            matchedSkills: ["swift"], matchedCertifications: [],
+                            explanation: "e")
+        let c = TalentMatch(resumeId: "other", score: 0.0, skillScore: 0.0,
+                            experienceScore: 0.0, certScore: 0.0,
+                            matchedSkills: [], matchedCertifications: [],
+                            explanation: "")
+        XCTAssertEqual(a, b)
+        XCTAssertNotEqual(a, c)
+    }
+
+    /// Exercises the auto-synthesized `==` on `TalentSearchCriteria`.
+    func testTalentSearchCriteriaEquatable() {
+        let a = TalentSearchCriteria(wantedSkills: ["swift"],
+                                     wantedCertifications: ["cpr"],
+                                     desiredYears: 3,
+                                     filter: .hasSkill("swift"))
+        let b = TalentSearchCriteria(wantedSkills: ["swift"],
+                                     wantedCertifications: ["cpr"],
+                                     desiredYears: 3,
+                                     filter: .hasSkill("swift"))
+        let c = TalentSearchCriteria(wantedSkills: ["kotlin"])
+        XCTAssertEqual(a, b)
+        XCTAssertNotEqual(a, c)
+    }
+
+    /// Exercises the auto-synthesized `==` on `BooleanFilter` across every
+    /// case so the indirect-enum comparison branches light up.
+    func testBooleanFilterEquatable() {
+        XCTAssertEqual(BooleanFilter.hasSkill("s"), .hasSkill("s"))
+        XCTAssertNotEqual(BooleanFilter.hasSkill("a"), .hasSkill("b"))
+        XCTAssertEqual(BooleanFilter.hasCertification("c"), .hasCertification("c"))
+        XCTAssertEqual(BooleanFilter.minYears(5), .minYears(5))
+        XCTAssertEqual(BooleanFilter.hasTag("t"), .hasTag("t"))
+        XCTAssertEqual(BooleanFilter.and(.hasSkill("a"), .minYears(1)),
+                       .and(.hasSkill("a"), .minYears(1)))
+        XCTAssertEqual(BooleanFilter.or(.hasSkill("a"), .hasTag("t")),
+                       .or(.hasSkill("a"), .hasTag("t")))
+        XCTAssertEqual(BooleanFilter.not(.hasSkill("a")), .not(.hasSkill("a")))
+        XCTAssertNotEqual(BooleanFilter.hasSkill("a"), .hasCertification("a"))
+    }
+
+    /// Exercises the auto-synthesized `==` on `Resume` across every stored
+    /// property so every synthesized comparison branch runs.
+    func testResumeEquatable() {
+        let base = Resume(id: "r", name: "n", skills: ["s"],
+                          yearsExperience: 3, certifications: ["c"],
+                          tags: ["t"])
+        XCTAssertEqual(base, base)
+        XCTAssertNotEqual(base, Resume(id: "x", name: "n", skills: ["s"],
+                                       yearsExperience: 3, certifications: ["c"],
+                                       tags: ["t"]))
+        XCTAssertNotEqual(base, Resume(id: "r", name: "x", skills: ["s"],
+                                       yearsExperience: 3, certifications: ["c"],
+                                       tags: ["t"]))
+        XCTAssertNotEqual(base, Resume(id: "r", name: "n", skills: [],
+                                       yearsExperience: 3, certifications: ["c"],
+                                       tags: ["t"]))
+        XCTAssertNotEqual(base, Resume(id: "r", name: "n", skills: ["s"],
+                                       yearsExperience: 99, certifications: ["c"],
+                                       tags: ["t"]))
+        XCTAssertNotEqual(base, Resume(id: "r", name: "n", skills: ["s"],
+                                       yearsExperience: 3, certifications: [],
+                                       tags: ["t"]))
+        XCTAssertNotEqual(base, Resume(id: "r", name: "n", skills: ["s"],
+                                       yearsExperience: 3, certifications: ["c"],
+                                       tags: []))
+    }
 }
