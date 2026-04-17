@@ -405,4 +405,78 @@ final class AuditReport2ClosureTests: XCTestCase {
                        "publishedItems must only ever return status==.published")
         XCTAssertFalse(all.contains(draftId))
     }
+
+    // MARK: - Checkout keychain-seal failure path (durability rollback)
+
+    /// Covers the rollback branch when keychain.set throws AFTER persist has
+    /// already committed. Sealing a pre-existing item in InMemoryKeychain
+    /// makes the next .set throw `readOnly` — exactly what a real Keychain
+    /// would do if the entry were already sealed by a prior corrupted run.
+    /// The contract: persisted snapshot is deleted, no orderStore entry is
+    /// written, no duplicate-lockout is applied, caller sees .persistenceFailed.
+    func testKeychainSealFailureAfterPersistRollsBackDurableWrite() throws {
+        let keychain = InMemoryKeychain()
+        let store = InMemoryPersistenceStore()
+        let clock = FakeClock()
+        // Pre-seal the order-hash key so keychain.set throws on the real submit.
+        let orderId = "O-seal-fail"
+        let sealedKey = CheckoutService.keychainKey(for: orderId)
+        try keychain.set(Data([0]), forKey: sealedKey)
+        keychain.seal(sealedKey)
+
+        let svc = CheckoutService(clock: clock, keychain: keychain,
+                                  persistence: store)
+        let catalog = Catalog([SKU(id: "t1", kind: .ticket, title: "T",
+                                   priceCents: 100)])
+        let cart = Cart(catalog: catalog)
+        try cart.add(skuId: "t1", quantity: 1)
+        let addr = USAddress(id: "a", recipient: "A", line1: "1",
+                             city: "NYC", state: .NY, zip: "10001")
+        let ship = ShippingTemplate(id: "std", name: "Std", feeCents: 500, etaDays: 3)
+
+        XCTAssertThrowsError(try svc.submit(orderId: orderId,
+                                             userId: customer.id,
+                                             cart: cart, discounts: [],
+                                             address: addr, shipping: ship,
+                                             invoiceNotes: "",
+                                             actingUser: customer)) { err in
+            XCTAssertEqual(err as? CheckoutError, .persistenceFailed,
+                           "keychain seal failure must surface as .persistenceFailed")
+        }
+        // Rollback contract: no durable snapshot, no orderStore entry.
+        XCTAssertNil(try? store.load(key: CheckoutService.persistencePrefix + orderId),
+                     "persisted snapshot must be rolled back when keychain seal fails")
+        XCTAssertNil(svc.order(orderId, ownedBy: customer.id),
+                     "orderStore must NOT contain the order when keychain seal fails")
+    }
+
+    // MARK: - Checkout unified seat-transaction error path
+
+    /// Every seat-related failure inside the checkout atomic block must
+    /// surface as `.seatUnavailable`. Pins the unified-catch contract.
+    func testCheckoutSeatTransactionFailureMapsToSeatUnavailable() throws {
+        let clock = FakeClock()
+        let inv = SeatInventoryService(clock: clock)
+        let svc = CheckoutService(clock: clock, keychain: InMemoryKeychain())
+        let catalog = Catalog([SKU(id: "t1", kind: .ticket, title: "T",
+                                   priceCents: 100)])
+        let cart = Cart(catalog: catalog)
+        try cart.add(skuId: "t1", quantity: 1)
+        // Unknown seat → SeatError.unknownSeat → mapped to .seatUnavailable.
+        let unknownSeat = SeatKey(trainId: "?", date: "?", segmentId: "?",
+                                  seatClass: .economy, seatNumber: "?")
+        let addr = USAddress(id: "a", recipient: "A", line1: "1",
+                             city: "NYC", state: .NY, zip: "10001")
+        let ship = ShippingTemplate(id: "std", name: "Std", feeCents: 500, etaDays: 3)
+        XCTAssertThrowsError(try svc.submit(orderId: "O-seat-fail",
+                                             userId: customer.id,
+                                             cart: cart, discounts: [],
+                                             address: addr, shipping: ship,
+                                             invoiceNotes: "",
+                                             actingUser: customer,
+                                             seats: [unknownSeat],
+                                             seatInventory: inv)) { err in
+            XCTAssertEqual(err as? CheckoutError, .seatUnavailable)
+        }
+    }
 }

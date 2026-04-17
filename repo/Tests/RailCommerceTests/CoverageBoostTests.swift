@@ -324,6 +324,79 @@ final class CoverageBoostTests: XCTestCase {
         _ = TalentMatchingService(persistence: HydrateFailingStore())
     }
 
+    /// Hydration must walk every resume's full skill / cert / tag set and
+    /// rebuild all three indices. Uses a persistence store pre-seeded with
+    /// two resumes that have distinct skills, certifications, AND tags so
+    /// every `skillIndex[s, default: []].insert(...)` autoclosure fires
+    /// (default-value-of-empty-set path) for each index. Closes the
+    /// remaining nested-closure coverage in `TalentMatchingService.hydrate`.
+    func testTalentHydrateRestoresEveryIndex() throws {
+        let store = InMemoryPersistenceStore()
+        let seeding = TalentMatchingService(persistence: store)
+        seeding.importResume(Resume(id: "r1", name: "A",
+                                    skills: ["swift", "uikit"],
+                                    yearsExperience: 3,
+                                    certifications: ["cpr"],
+                                    tags: ["remote"]))
+        seeding.importResume(Resume(id: "r2", name: "B",
+                                    skills: ["kotlin"],
+                                    yearsExperience: 1,
+                                    certifications: ["first-aid"],
+                                    tags: ["onsite"]))
+
+        // Fresh service hydrating from the same store — must rebuild
+        // every index entry.
+        let hydrated = TalentMatchingService(persistence: store)
+        let admin = User(id: "admin", displayName: "A", role: .administrator)
+        let swiftMatches = try hydrated.search(
+            TalentSearchCriteria(wantedSkills: ["swift"]), by: admin)
+        XCTAssertEqual(swiftMatches.first?.resumeId, "r1",
+                       "skillIndex must be rebuilt on hydrate")
+        let cprMatches = try hydrated.search(
+            TalentSearchCriteria(wantedCertifications: ["cpr"]), by: admin)
+        XCTAssertEqual(cprMatches.first?.resumeId, "r1",
+                       "certIndex must be rebuilt on hydrate")
+        let tagMatches = try hydrated.search(
+            TalentSearchCriteria(filter: .hasTag("onsite")), by: admin)
+        XCTAssertEqual(tagMatches.first?.resumeId, "r2",
+                       "tagIndex must be rebuilt on hydrate")
+    }
+
+    /// Import-rollback path must rebuild skill / cert / tag indices when a
+    /// prior record is restored. Uses a resume with non-empty certs and
+    /// tags so every default-value autoclosure in
+    /// `rebuildIndicesAfterRollback(restored:)` fires.
+    func testTalentImportRollbackRebuildsCertsAndTags() {
+        let failing = ToggleStore()
+        failing.failOnSave = false
+        let svc = TalentMatchingService(persistence: failing)
+        // Seed with a resume that has skills AND certs AND tags.
+        let v1 = Resume(id: "r1", name: "v1",
+                        skills: ["swift"], yearsExperience: 3,
+                        certifications: ["cpr", "safety"],
+                        tags: ["onsite", "bilingual"])
+        svc.importResume(v1)
+
+        // Attempt to replace with v2 while the store is failing.
+        failing.failOnSave = true
+        let v2 = Resume(id: "r1", name: "v2",
+                        skills: ["kotlin"], yearsExperience: 5,
+                        certifications: ["first-aid"],
+                        tags: ["remote"])
+        svc.importResume(v2)
+
+        // Prior record's certs and tags must still resolve via the indices.
+        let admin = User(id: "admin", displayName: "A", role: .administrator)
+        let cprMatches = try! svc.search(
+            TalentSearchCriteria(wantedCertifications: ["cpr"]), by: admin)
+        XCTAssertEqual(cprMatches.first?.resumeId, "r1",
+                       "cert index must be restored to v1's cpr entry on rollback")
+        let tagMatches = try! svc.search(
+            TalentSearchCriteria(filter: .hasTag("onsite")), by: admin)
+        XCTAssertEqual(tagMatches.first?.resumeId, "r1",
+                       "tag index must be restored to v1's onsite tag on rollback")
+    }
+
     // MARK: - AttachmentService: persistence failure + hydrate + helpers
 
     func testAttachmentSavePropagatesPersistenceFailure() {

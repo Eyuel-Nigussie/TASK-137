@@ -197,15 +197,16 @@ public final class CheckoutService {
                         try inventory.confirm(seat, holderId: userId, actingUser: actingUser)
                     }
                 }
-            } catch let seatError as SeatError {
-                // Map any seat-level error to a single checkout-level error so
-                // the UI can present a coherent "seat unavailable" message and
-                // the caller can distinguish this from unrelated failures.
-                logger.warn(.checkout, "submit seat transaction failed orderId=\(orderId) err=\(seatError)")
-                throw CheckoutError.seatUnavailable
             } catch {
+                // Every seat-transaction failure collapses to a single
+                // checkout-level error so the UI can show one coherent message
+                // and callers need not peek at the concrete SeatError. This
+                // unified catch covers both the typed SeatError (wrong holder,
+                // not available, unknown seat, reservation expired,
+                // persistenceFailed) and any non-SeatError that a future
+                // injected inventory adapter might surface.
                 logger.warn(.checkout, "submit seat transaction failed orderId=\(orderId) err=\(error)")
-                throw error
+                throw CheckoutError.seatUnavailable
             }
         }
 

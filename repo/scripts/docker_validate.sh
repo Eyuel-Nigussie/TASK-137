@@ -17,7 +17,7 @@ fail() { printf "[FAIL] %s\n" "$1"; FAIL=$((FAIL + 1)); }
 echo "==================== RailCommerce Docker Validation ===================="
 
 # 1. Mandatory top-level files.
-for f in README.md Package.swift run_tests.sh run_ios_tests.sh start.sh \
+for f in README.md Package.swift run_tests.sh start.sh \
          Dockerfile docker-compose.yml RailCommerceApp.xcodeproj/project.pbxproj; do
     if [ -e "/app/$f" ]; then
         pass "mandatory file present: $f"
@@ -45,7 +45,7 @@ else
 fi
 
 # 4. Platform guard — scripts must skip gracefully on non-macOS hosts.
-for script in run_tests.sh run_ios_tests.sh start.sh; do
+for script in run_tests.sh start.sh; do
     if grep -q 'Darwin' "/app/$script" && grep -q 'exit 0' "/app/$script"; then
         pass "$script has platform guard with graceful exit 0"
     else

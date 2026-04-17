@@ -35,7 +35,6 @@ Native iOS application (Swift / UIKit) for fully-offline rail retail operations 
 ├── project.pbxproj (in .xcodeproj)# Xcode project
 ├── Package.swift                  # Swift Package manifest
 ├── run_tests.sh                   # Standardized test execution script - MANDATORY
-├── run_ios_tests.sh               # iOS UIKit-layer XCTest runner
 └── README.md                      # Project documentation - MANDATORY
 ```
 
@@ -69,25 +68,21 @@ Native iOS application (Swift / UIKit) for fully-offline rail retail operations 
 
 ## Testing
 
-The **single canonical test command** is `run_tests.sh`. All unit, integration, and audit-closure tests are executed through this script:
+The **single canonical test command** is `run_tests.sh`. It executes every test — library + iOS UIKit app-layer — in one invocation:
 
 ```bash
 chmod +x run_tests.sh
 ./run_tests.sh
 ```
 
-This runs the full XCTest library suite (636 tests) via `swift test --enable-code-coverage` on the local macOS host and prints a per-file coverage report (96.96% region / 98.96% line). Exit code 0 = all tests passed; non-zero = failure.
+The script runs two stages in sequence:
 
-For the iOS UIKit layer (view controllers, SystemKeychain, AppShellFactory, Multipeer spoof-rejection) run:
+1. `swift test --enable-code-coverage` — the full portable-library XCTest suite (636 tests) with per-file region / line / function coverage reporting (96.96% region / 98.96% line).
+2. `xcodebuild test` on an iOS Simulator — the iOS UIKit app-layer XCTest bundle (58 tests: view controllers, SystemKeychain, AppShellFactory, Multipeer spoof-rejection).
 
-```bash
-chmod +x run_ios_tests.sh
-./run_ios_tests.sh
-```
+Exit code 0 = all tests passed; non-zero = failure. On non-macOS hosts the script prints a `Skipping:` block and exits 0 so CI on Linux is not marked failed.
 
-This runs the `RailCommerceAppTests` bundle (58 tests) via `xcodebuild test` on an iOS Simulator.
-
-> **Docker validation** (`docker compose run build`) is secondary tooling that performs static project structure and test coverage checks inside an Alpine container. It does not execute XCTest and is not the canonical test path. iOS apps cannot be compiled or run in any Linux container because Xcode, the iOS SDK, and the iOS Simulator ship only for macOS. The canonical test path is `./run_tests.sh` and `./run_ios_tests.sh` on macOS.
+> **Docker validation** (`docker compose run build`) is secondary tooling that performs static project structure and test coverage checks inside an Alpine container. It does not execute XCTest and is not the canonical test path. iOS apps cannot be compiled or run in any Linux container because Xcode, the iOS SDK, and the iOS Simulator ship only for macOS. The canonical test path is `./run_tests.sh` on macOS.
 
 ## Seeded Credentials
 
