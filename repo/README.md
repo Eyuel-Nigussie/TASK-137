@@ -64,7 +64,7 @@ Docker is **supported where it can add value** (portable-library parity build) a
   ```
 * [Docker](https://docs.docker.com/get-docker/) — optional, only needed if you plan to build the Linux parity image.
 
-Both `start.sh` and `run_tests.sh` check the host OS at startup and abort with a clear `platform not supported` message on any non-Darwin host. Exit code on rejection is `1`.
+All three scripts (`start.sh`, `run_tests.sh`, `run_ios_tests.sh`) check the host OS at startup. On any non-Darwin host they print a `Skipping:` block explaining that iOS builds/tests cannot run on that platform and **exit `0`** so a Linux-based CI runner is not marked as failed — there is simply nothing for the iOS toolchain to do there. On macOS they proceed normally.
 
 ## Running the Application
 
