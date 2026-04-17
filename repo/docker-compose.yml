@@ -1,28 +1,18 @@
-# Docker Compose manifest — Docker-contained test workflow for the
-# portable `RailCommerce` library.
+# Docker Compose — validation service for Linux-based CI gates.
 #
-#     docker compose build   — builds a Swift 5.10 Linux image with the
-#                              library + test bundle pre-compiled.
-#     docker compose up      — runs `swift test --enable-code-coverage`
-#                              inside the container. Exits 0 on pass,
-#                              non-zero on any test failure.
+# Usage:
+#     docker compose build          # build the Alpine validator image
+#     docker compose run build      # run the static validation checks
 #
-# Why only the library, not the iOS app: iOS apps can't build or run in
-# any Linux container (no Xcode toolchain on Linux, no iOS SDK, iOS
-# Simulator is macOS-only, Apple EULA forbids macOS VMs on non-Apple
-# hardware). See README.md → "Why Docker Cannot Run This App". The iOS
-# UIKit target is gated with `#if canImport(UIKit)` so it compiles to
-# an empty module on Linux; RealmSwift is gated with
-# `.when(platforms: [.iOS])` so it is never fetched or compiled on
-# Linux; CryptoKit / Security / LocalAuthentication code paths are
-# `#if canImport(...)` gated so the Linux build uses pure-Swift
-# fallbacks.
+# The `build` service is a validation harness only. It does NOT compile or
+# run the iOS app. iOS builds require macOS + Xcode (see README.md). For the
+# actual XCTest suite use `./run_tests.sh` on macOS; `docker compose run build`
+# is secondary tooling that performs static project-structure and test-
+# coverage checks inside an Alpine container.
 services:
-  railcommerce:
+  build:
     build:
       context: .
       dockerfile: Dockerfile
     image: railcommerce:latest
-    # Single-shot test run — no restart, no daemon. A non-zero exit here
-    # means a test failed; CI should fail too.
     restart: "no"

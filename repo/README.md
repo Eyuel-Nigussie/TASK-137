@@ -1,141 +1,106 @@
 # RailCommerce Operations
 
-Fully-offline iOS operations app for rail retail — ticket and merchandise sales, content publishing with approval workflow, after-sales (return / refund / exchange), offline peer-to-peer staff messaging, seat inventory with 15-minute atomic reservations, membership marketing, and offline talent matching. All computation and persistence run on-device; there is no backend.
-
-## Running and Testing — the Docker-contained Workflow
-
-**Every business-logic test in this project runs inside a Docker container.** The container builds a Swift 5.10 Linux image, compiles the portable `RailCommerce` library + its XCTest bundle, and runs **all 605 XCTest cases with `--enable-code-coverage`** on `docker compose up`.
-
-```bash
-docker compose build      # build the Swift Linux image (first run ~2–4 min, cached after)
-docker compose up         # runs `swift test --enable-code-coverage` inside the container
-```
-
-**Expected step-by-step output**:
-
-| Step | Expected line(s) in terminal | Success signal |
-|---|---|---|
-| 1. Image build | `Building for debugging...` then `Build complete!` | No `error:` lines |
-| 2. Test start | `Test Suite 'All tests' started at …` | Exact literal prefix |
-| 3. Per-case pass | `Test Case '-[...]' passed (…)` for every case | No `failed (…)` lines |
-| 4. Final summary | `Test Suite 'All tests' passed at …` | Exact literal string |
-| 5. Executed count | `Executed 605 tests, with 0 failures (0 unexpected) in …` | `0 failures`, `0 unexpected` |
-| 6. Container exit | `docker compose up` returns control to the shell | Exit code `0` |
-
-**Expected `docker compose up` exit code:** `0`. A non-zero exit means a test failed; CI should fail.
-
-### What the container covers (and what it does not)
-
-| What is tested in the container | What is NOT in the container |
-|---|---|
-| All portable business logic (catalog, cart, promotions, checkout, seats, after-sales, messaging, talent matching, membership, attachments, lifecycle, auth, persistence — 605 tests) | Any iOS-specific code (UIKit view controllers, iOS Keychain wrapper, MultipeerConnectivity transport, BGTaskScheduler) |
-
-The iOS-only code is physically unreachable from Linux for the reasons below; the macOS-only scripts in this repo cover it separately.
-
-## Why the Docker Container Cannot Build the iOS App
-
-The container runs the library tests, not the iOS app build. iOS apps **cannot be built or run inside Docker** — this is a platform constraint, not a project choice:
-
-1. **The Xcode toolchain is not available on Linux.** `xcodebuild`, `xcrun`, the iOS SDK, and the Darwin-slice Swift compiler all ship only as part of Xcode, which Apple distributes exclusively for macOS. No apt/yum/apk package exists for Xcode; there is no Linux tarball of the iOS SDK.
-2. **iOS Simulator is macOS-only.** The Simulator relies on Apple's private `CoreSimulator.framework` and Mach-O dynamic linking, which exist only inside the macOS userland.
-3. **Docker Desktop on Mac runs a Linux VM.** Any container you launch is a Linux guest, and Linux cannot host macOS frameworks.
-4. **Apple's EULA forbids running macOS VMs on non-Apple hardware** — the typical "put macOS in Docker" workaround is both technically fragile and license-violating.
-5. **No official Xcode-in-Docker image exists.** Apple has never published one; every third-party image either bind-mounts the host macOS toolchain or violates §4.
-
-Because of this, the iOS app build + UIKit test execution lives in local macOS scripts (next section). The Docker-contained flow above still covers **every line of the portable business logic** — the part that would otherwise be a backend on a server project.
-
-## Optional macOS-only Developer Scripts
-
-If you are running on macOS and have Xcode installed, these scripts exist for local developer convenience. They are **not required** for CI / validation — the Docker flow above is authoritative for the business-logic test suite.
-
-| Script | What it does | When to use |
-|---|---|---|
-| `./start.sh` | Builds the iOS app with `xcodebuild` and launches it on an iOS Simulator. | Manual UI verification during development. |
-| `./run_tests.sh` | Runs the same 605-case portable XCTest suite that Docker runs, but via the local Swift toolchain. | Fast iteration during development (no Docker warm-up). |
-| `./run_ios_tests.sh` | Runs the iOS app-layer XCTest bundle (view controllers, system keychain wrapper, AppShellFactory) on an iOS Simulator via `xcodebuild test`. | Verifying UIKit-layer code that the Linux container cannot reach. |
-
-Each script checks `uname -s` at startup. On any non-Darwin host they print a `Skipping:` block and **exit `0`** (they do not fail CI — they simply acknowledge that iOS tooling only exists on macOS).
-
-### Expected output — `./start.sh` (macOS only)
-
-| Step | Expected line(s) | Success signal |
-|---|---|---|
-| 1. Platform check | *(nothing — on macOS)* | Script proceeds |
-| 2. Simulator pick | `>>> Using simulator: <UDID>` | A 36-char UDID is printed |
-| 3. Build | `** BUILD SUCCEEDED **` | Last line of the `xcodebuild` section |
-| 4. Bundle id | `>>> Bundle identifier: com.eaglepoint.railcommerce` | Exact string |
-| 5. Boot + launch | `>>> RailCommerce is running on simulator <UDID>.` | App visible on Simulator |
-
-### Expected output — `./run_tests.sh` (macOS only)
-
-Same 605 test cases as the Docker flow, plus a per-file coverage summary:
-
-| Step | Expected line(s) | Success signal |
-|---|---|---|
-| 1. Run tests | `Executed 605 tests, with 0 failures (0 unexpected) in …` | `0 failures`, `0 unexpected` |
-| 2. Coverage TOTAL | `TOTAL 1514 46 96.96% … 528 23 95.64% … 2882 30 98.96%` | Region ≥ 95%, Function ≥ 95%, Line ≥ 95% |
-
-### Expected output — `./run_ios_tests.sh` (macOS only)
-
-| Step | Expected line(s) | Success signal |
-|---|---|---|
-| 1. Test run | `Test Case '-[RailCommerceAppTests...]' passed` for every case | No `failed` lines |
-| 2. Final | `** TEST SUCCEEDED **` | Exact literal string |
+Native iOS application (Swift / UIKit) for fully-offline rail retail operations — ticket and merchandise sales, content publishing with approval workflow, after-sales (return / refund / exchange), secure offline peer-to-peer staff messaging, seat inventory with 15-minute atomic reservations, membership marketing, and offline talent matching. The app supports multi-role workflows for customers, sales agents, content editors, content reviewers, customer-service reps, and administrators with full on-device persistence, credential hashing, and tenant isolation.
 
 ## Architecture & Tech Stack
 
-* **Platform:** iOS 16+ (UIKit)
-* **Language:** Swift 5.7+ (5.10 in the Linux test container)
-* **UI:** UIKit (split view / tabs, Dynamic Type, haptics)
-* **Reactive:** RxSwift
-* **Database:** Realm (iOS only — gated behind `platforms: [.iOS]`)
-* **Secrets:** iOS Keychain (PBKDF2-SHA256 credential hashes, order-hash integrity)
+* **Application:** Native iOS (Swift / UIKit) — fully offline, no backend
+* **Persistence:** Realm (encrypted on-device) with per-user scoping; Keychain for credential hashes and order-hash integrity
+* **Security:** Keychain (PBKDF2-SHA256, 310k iterations, per-user salt + Keychain-held pepper), biometric re-auth (LocalAuthentication), order-snapshot HMAC tamper hash, identity-bound Multipeer inbound frames
 * **Local networking:** `MultipeerConnectivity` (peer-to-peer over Wi-Fi / Bluetooth / AWDL — no internet)
-* **Containerization:** Docker & Docker Compose (required — all business-logic tests run via `docker compose up`)
+* **Reactive:** RxSwift
+* **Build:** Swift Package Manager (Package.swift) + Xcode project (RailCommerceApp.xcodeproj), Xcode 16+, iOS 16.0+ deployment target
+* **Containerization:** Docker & Docker Compose (Required)
+* **Testing:** XCTest (unit, integration, iOS app-layer)
 
 ## Project Structure
 
 ```text
 .
-├── docker-compose.yml             # Required: builds + runs the test container.
-├── Dockerfile                     # Swift 5.10 Linux image that runs `swift test` on CMD.
-├── start.sh                       # Optional macOS: build + launch on iOS Simulator.
-├── run_tests.sh                   # Optional macOS: same 605 tests as the container.
-├── run_ios_tests.sh               # Optional macOS: iOS UIKit-layer XCTest on Simulator.
-├── Package.swift                  # Swift Package manifest (Linux + iOS).
-├── RailCommerceApp.xcodeproj/     # Xcode project (iOS app target + iOS test target).
 ├── Sources/
-│   ├── RailCommerce/              # Portable library (models + services) — tested by the container.
-│   ├── RailCommerceApp/           # iOS UIKit app (VCs, transports, Keychain) — tested by run_ios_tests.sh.
-│   └── RailCommerceDemo/          # Headless CLI that drives every service.
+│   ├── RailCommerce/              # Portable library (models + services)
+│   │   ├── Core/                  # Auth, persistence, logger, transport
+│   │   ├── Models/                # Roles, taxonomy, catalog, address
+│   │   └── Services/              # Checkout, after-sales, messaging, seats, content, talent, membership, attachments
+│   ├── RailCommerceApp/           # iOS UIKit app (AppDelegate, views, Keychain, Multipeer)
+│   └── RailCommerceDemo/          # Headless CLI that drives every service
 ├── Tests/
-│   ├── RailCommerceTests/         # 605 library XCTest cases — run by the Docker container.
-│   └── RailCommerceAppTests/      # iOS UIKit XCTest bundle — run by run_ios_tests.sh on a Simulator.
-└── README.md
+│   ├── RailCommerceTests/         # 51 files, 636 test methods (library)
+│   └── RailCommerceAppTests/      # 9 files, 58 test methods (iOS app-layer)
+├── docs/                          # design.md, questions.md, apispec.md
+├── scripts/                       # Docker validation helpers
+├── start.sh                       # Launch app locally on iOS Simulator - MANDATORY
+├── Dockerfile                     # Container build definition - MANDATORY
+├── docker-compose.yml             # Docker validation service - MANDATORY
+├── project.pbxproj (in .xcodeproj)# Xcode project
+├── Package.swift                  # Swift Package manifest
+├── run_tests.sh                   # Standardized test execution script - MANDATORY
+├── run_ios_tests.sh               # iOS UIKit-layer XCTest runner
+└── README.md                      # Project documentation - MANDATORY
 ```
 
 ## Prerequisites
 
-To run the Docker-contained test workflow (the authoritative path), you need only:
-
 * [Docker](https://docs.docker.com/get-docker/)
-* [Docker Compose](https://docs.docker.com/compose/install/) (bundled with Docker Desktop)
+* [Docker Compose](https://docs.docker.com/compose/install/)
+* **macOS with Xcode 16+** and at least one iOS 16+ Simulator runtime installed
 
-To use the optional macOS developer scripts, you additionally need:
+## Running the Application
 
-* macOS 13+
-* [Xcode 16+](https://apps.apple.com/us/app/xcode/id497799835) with at least one iOS 16+ Simulator runtime installed.
+1. **Start the App:**
+   ```bash
+   ./start.sh
+   ```
+   Builds the project, installs it on the iOS Simulator (iPhone 15 by default; override via `SIM_NAME="iPhone 17" ./start.sh`), and launches it.
+
+2. **Access the App:**
+   The RailCommerce login screen appears automatically after `./start.sh` completes.
+
+3. **Verify the App Works:**
+   1. The login screen shows **Username** and **Password** fields plus, on a fresh install, a **Create Administrator Account** button (bootstrap path when no credentials are enrolled).
+   2. Tap **Create Administrator Account** → enter username `admin`, password `AdminTest123!` → submit. The first account enrolled becomes the administrator.
+   3. The main tab bar appears: **Browse**, **Advisories**, **Cart**, **Seats**, **Returns**, **Content**, **Talent**, **Membership**, **Messages** (visible tabs depend on the signed-in role).
+   4. On iPad, the shell automatically becomes a two-column **UISplitViewController** with the same role-aware feature set in the sidebar.
+
+4. **Stop and Clean Up:**
+   ```bash
+   docker compose down -v
+   ```
+
+## Testing
+
+The **single canonical test command** is `run_tests.sh`. All unit, integration, and audit-closure tests are executed through this script:
+
+```bash
+chmod +x run_tests.sh
+./run_tests.sh
+```
+
+This runs the full XCTest library suite (636 tests) via `swift test --enable-code-coverage` on the local macOS host and prints a per-file coverage report (96.96% region / 98.96% line). Exit code 0 = all tests passed; non-zero = failure.
+
+For the iOS UIKit layer (view controllers, SystemKeychain, AppShellFactory, Multipeer spoof-rejection) run:
+
+```bash
+chmod +x run_ios_tests.sh
+./run_ios_tests.sh
+```
+
+This runs the `RailCommerceAppTests` bundle (58 tests) via `xcodebuild test` on an iOS Simulator.
+
+> **Docker validation** (`docker compose run build`) is secondary tooling that performs static project structure and test coverage checks inside an Alpine container. It does not execute XCTest and is not the canonical test path. iOS apps cannot be compiled or run in any Linux container because Xcode, the iOS SDK, and the iOS Simulator ship only for macOS. The canonical test path is `./run_tests.sh` and `./run_ios_tests.sh` on macOS.
 
 ## Seeded Credentials
 
-Release builds start with an empty credential store and present a **Create Administrator Account** button on the login screen for first-install bootstrap. DEBUG builds additionally seed six role fixtures so manual UI testing is immediate. Use these credentials to verify authentication and role-based access controls:
+This is a fully offline native iOS app with no shipped seed data. Accounts are created locally through the in-app **Create Administrator Account** flow on first launch. The first user enrolled becomes the administrator.
+
+For testing, DEBUG builds additionally seed six role fixtures so manual UI testing is immediate. Use these credentials to verify authentication and role-based access controls (passwords must be 12+ chars, with at least 1 digit and 1 symbol):
 
 | Role | Username | Password | Notes |
 | :--- | :--- | :--- | :--- |
-| **Administrator** | `dan` | `DanAdmin!2024$` | Full access to every module. |
+| **Admin** | `dan` | `DanAdmin!2024$` | Full access to every module. |
 | **Customer** | `alice` | `Alice!Pass1#2024` | Browse, cart, checkout, after-sales. |
-| **Sales Agent** | `sam` | `SamAgent!2024$` | Process transactions, manage inventory. |
-| **Content Editor** | `eve` | `EveEditor!2024$` | Draft content (cannot approve). |
+| **Sales Agent** | `sam` | `SamAgent!2024$` | Process transactions, manage inventory (on-behalf-of sales). |
+| **Content Editor** | `eve` | `EveEditor!2024$` | Draft content (cannot approve own draft). |
 | **Content Reviewer** | `rita` | `RitaReview!2024$` | Review + publish content. |
 | **Customer Service** | `chris` | `ChrisCSR!2024$` | Handle after-sales tickets, staff messaging. |
 
