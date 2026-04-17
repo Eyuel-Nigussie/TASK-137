@@ -85,12 +85,22 @@ echo ">>> Using simulator: $SIM_UDID"
 DESTINATION="platform=iOS Simulator,id=${SIM_UDID}"
 
 echo ">>> Building $SCHEME ($CONFIGURATION)..."
+# Simulator builds use ad-hoc signing ("-", "Sign to Run Locally") so they
+# work on fresh clones with no configured developer team. Fully disabling
+# signing would strip entitlements and break Keychain-backed runtime code
+# on the simulator, so we use "-" instead of "" and leave signing allowed.
+# CODE_SIGN_STYLE=Manual prevents Xcode from trying to contact Apple to
+# provision a team profile.
 xcodebuild \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -configuration "$CONFIGURATION" \
     -destination "$DESTINATION" \
     -derivedDataPath "./build" \
+    CODE_SIGN_IDENTITY="-" \
+    CODE_SIGN_STYLE=Manual \
+    DEVELOPMENT_TEAM="" \
+    PROVISIONING_PROFILE_SPECIFIER="" \
     build
 
 APP_BUNDLE=$(find "./build/Build/Products" -maxdepth 3 -name "$SCHEME.app" -type d | head -1)

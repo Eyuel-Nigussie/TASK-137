@@ -50,6 +50,41 @@ final class SeatInventoryServiceTests: XCTestCase {
         XCTAssertNil(svc.reservation(seat))
     }
 
+    /// Tight boundary triple at the 15-minute hold edge (900 seconds).
+    /// - 899s: still reserved (one second before expiry).
+    /// - 900s: the inclusive/exclusive edge of `Reservation.expiresAt`.
+    /// - 901s: definitely expired.
+    /// Pinning all three stops future "off by one" drift on the expiry predicate.
+    func testReservationHoldBoundaryAt899SecondsIsStillReserved() throws {
+        let (svc, clock, seat) = makeService()
+        try svc.reserve(seat, holderId: "H", actingUser: salesAgent)
+        clock.advance(by: 899)
+        XCTAssertEqual(svc.state(seat), .reserved,
+                       "at 14:59 the hold has not yet expired")
+        XCTAssertNotNil(svc.reservation(seat))
+    }
+
+    func testReservationHoldBoundaryAt900SecondsExpires() throws {
+        let (svc, clock, seat) = makeService()
+        try svc.reserve(seat, holderId: "H", actingUser: salesAgent)
+        clock.advance(by: 900)
+        // 900s === exactly `reservationLockSeconds` — expiry predicate is
+        // `expiresAt <= now`, so the seat flips to available the moment the
+        // clock catches up. Pinning this resolves the inclusive-edge question.
+        XCTAssertEqual(svc.state(seat), .available,
+                       "at exactly 15:00 the hold has expired (expiresAt <= now)")
+        XCTAssertNil(svc.reservation(seat))
+    }
+
+    func testReservationHoldBoundaryAt901SecondsIsDefinitelyExpired() throws {
+        let (svc, clock, seat) = makeService()
+        try svc.reserve(seat, holderId: "H", actingUser: salesAgent)
+        clock.advance(by: 901)
+        XCTAssertEqual(svc.state(seat), .available,
+                       "one second past expiry the seat must be available")
+        XCTAssertNil(svc.reservation(seat))
+    }
+
     func testReleaseReturnsToAvailable() throws {
         let (svc, _, seat) = makeService()
         try svc.reserve(seat, holderId: "H", actingUser: salesAgent)

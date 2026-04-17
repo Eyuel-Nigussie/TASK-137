@@ -82,6 +82,24 @@ final class AuditClosureTests: XCTestCase {
         XCTAssertEqual(svc.get("R1")?.status, .autoRejected)
     }
 
+    /// 15 days past service date (one day beyond the threshold) MUST also
+    /// auto-reject — makes the ">= 14" half of the threshold explicit
+    /// alongside the day-13 and day-14 boundary tests.
+    func testAutoRejectAppliedAt15DaysPast() throws {
+        let base = Date(timeIntervalSince1970: 1_704_103_200)
+        let clock = FakeClock(base)
+        let svc = AfterSalesService(clock: clock, camera: FakeCamera(granted: true),
+                                    notifier: LocalNotificationBus())
+        let customer = User(id: "c1", displayName: "C", role: .customer)
+        let req = AfterSalesRequest(id: "R1", orderId: "O1", kind: .refundOnly,
+                                    reason: .changedMind, createdAt: base,
+                                    serviceDate: base.addingTimeInterval(-15 * 86_400),
+                                    amountCents: 5_000)
+        try svc.open(req, actingUser: customer)
+        _ = svc.runAutomation()
+        XCTAssertEqual(svc.get("R1")?.status, .autoRejected)
+    }
+
     // MARK: - Checkout snapshot line-level explanation persistence
 
     /// Round-trips an order snapshot through the persistence store and asserts the

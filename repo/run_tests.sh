@@ -92,12 +92,22 @@ if [[ -z "${SIM_UDID:-}" ]]; then
 fi
 echo
 echo ">>> [2/2] Running iOS app-layer tests via 'xcodebuild test' on simulator $SIM_UDID..."
+# Simulator builds use ad-hoc signing ("-", "Sign to Run Locally") so they
+# work on fresh clones with no configured developer team. Fully disabling
+# signing would strip entitlements and break Keychain-bound tests on the
+# simulator, so we use "-" instead of "" and leave signing allowed.
+# CODE_SIGN_STYLE=Manual prevents Xcode from trying to contact Apple to
+# provision a team profile.
 xcodebuild test \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -destination "platform=iOS Simulator,id=${SIM_UDID}" \
     -derivedDataPath "./build" \
-    -enableCodeCoverage YES
+    -enableCodeCoverage YES \
+    CODE_SIGN_IDENTITY="-" \
+    CODE_SIGN_STYLE=Manual \
+    DEVELOPMENT_TEAM="" \
+    PROVISIONING_PROFILE_SPECIFIER=""
 
 XCRESULT=$(ls -td ./build/Logs/Test/*.xcresult 2>/dev/null | head -1)
 if [[ -n "${XCRESULT:-}" ]]; then

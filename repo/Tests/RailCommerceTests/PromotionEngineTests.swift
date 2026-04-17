@@ -150,4 +150,25 @@ final class PromotionEngineTests: XCTestCase {
         let result = PromotionEngine.apply(cart: cart, discounts: [zero, amt])
         XCTAssertEqual(result.finalCents, 0)
     }
+
+    /// Duplicate code inputs: two `Discount` entries with the same `code` must
+    /// be handled deterministically — whichever has lower priority wins, and
+    /// the second is rejected as a percent-stacking violation (if percent) or
+    /// as max-discount-exceeded / stacking (mirroring the engine's single
+    /// linear pass). This pins the behaviour so callers that accidentally
+    /// submit a duplicate code get a predictable outcome, not a silent merge.
+    func testDuplicateCodeInputRejectsSecondDeterministically() {
+        let cart = makeCart()
+        // Same code "DUP", same kind, same magnitude, same priority.
+        // Sort is (priority asc, code asc) — both equal → stable order input.
+        let a = Discount(code: "DUP", kind: .percentOff, magnitude: 10, priority: 1)
+        let b = Discount(code: "DUP", kind: .percentOff, magnitude: 20, priority: 1)
+        let result = PromotionEngine.apply(cart: cart, discounts: [a, b])
+        XCTAssertEqual(result.acceptedCodes, ["DUP"],
+                       "exactly one of the two duplicate-code entries must apply")
+        XCTAssertEqual(result.rejectedCodes, ["DUP"],
+                       "the second duplicate-code entry must be rejected, not silently merged")
+        XCTAssertEqual(result.rejectionReasons["DUP"], "percent-off-stacking-blocked",
+                       "rejection reason must be the percent-stacking rule, not a hidden collision")
+    }
 }
