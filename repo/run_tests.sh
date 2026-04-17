@@ -98,6 +98,23 @@ echo ">>> [2/2] Running iOS app-layer tests via 'xcodebuild test' on simulator $
 # simulator, so we use "-" instead of "" and leave signing allowed.
 # CODE_SIGN_STYLE=Manual prevents Xcode from trying to contact Apple to
 # provision a team profile.
+#
+# We also pre-resolve SPM packages and strip extended attributes from the
+# working tree + derived data directory. macOS Gatekeeper sometimes stamps
+# files under ~/Documents (and anywhere else it inspects) with xattrs like
+# com.apple.quarantine / com.apple.provenance / com.apple.FinderInfo, which
+# then propagate into SPM framework bundles. `codesign` rejects those with
+# "resource fork, Finder information, or similar detritus not allowed". A
+# single `xattr -cr` pass clears them so ad-hoc signing succeeds.
+echo ">>> Pre-resolving SPM packages so xattrs can be stripped before signing..."
+xcodebuild -resolvePackageDependencies \
+    -project "$PROJECT" \
+    -scheme "$SCHEME" \
+    -derivedDataPath "./build" >/dev/null
+echo ">>> Stripping extended attributes (com.apple.quarantine et al.)..."
+xattr -cr . 2>/dev/null || true
+xattr -cr ./build 2>/dev/null || true
+
 xcodebuild test \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
