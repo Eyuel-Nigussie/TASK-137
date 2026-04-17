@@ -1,13 +1,19 @@
-# Compose file used solely to build the RailCommerce Linux image via:
-#     docker compose build
+# Compose file used by CI / reviewers to build and exercise the portable
+# `RailCommerce` Swift library on Linux.
 #
-# The image contains the Swift toolchain, the compiled portable library, and
-# the `RailCommerceDemo` CLI. It is kept as a parity/sanity environment for
-# the portable `RailCommerce` module and is NOT needed to run the iOS app or
-# the local test suite — use `./start.sh` and `./run_tests.sh` for those.
+#     docker compose build   — builds the image.
+#     docker compose up      — runs `RailCommerceDemo` which exercises every
+#                              service end-to-end and exits 0 on success.
+#
+# The iOS app itself cannot run in any container (see README → "Why Docker
+# Cannot Run This App"). This compose file is the sanity harness for the
+# portable business-logic layer only.
 services:
   railcommerce:
     build:
       context: .
       dockerfile: Dockerfile
     image: railcommerce:latest
+    # Run the demo once and exit — no restart, no long-running daemon.
+    # A non-zero exit here means the portable library broke; CI should fail.
+    restart: "no"

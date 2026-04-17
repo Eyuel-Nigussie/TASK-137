@@ -17,7 +17,7 @@ This project is an **iOS application** (UIKit + Realm + Keychain + LocalAuthenti
 |---|---|---|
 | `./start.sh` | **macOS + Xcode (mandatory)** | Build and launch the real iOS app on an iOS Simulator. |
 | `./run_tests.sh` | **macOS + Swift toolchain (mandatory)** | Run the full XCTest suite + print coverage. |
-| `docker compose build` | macOS or Linux with Docker | **Optional** — build a Linux parity image of the portable library (`RailCommerce` + `RailCommerceDemo`). Does not build or run the iOS app. |
+| `docker compose build` + `docker compose up` | macOS or Linux with Docker | Build a Linux image of the portable library (`RailCommerce` + `RailCommerceDemo`) and exercise it end-to-end via the demo CLI. Does not build or run the iOS app (Simulator is macOS-only — see above). |
 
 Docker is **supported where it can add value** (portable-library parity build) and **not used where it is fundamentally incompatible** (iOS Simulator). This is the only honest arrangement for an iOS deliverable; a shell script that pretends to run the iOS app in a container would fail on any reviewer's machine.
 
@@ -93,13 +93,27 @@ chmod +x start.sh
 
 Override the target device via `SIM_NAME="iPhone 17" ./start.sh`.
 
-### 2. Build the optional Linux parity image
+### 2. Build and run the Linux portable-library image
 
 ```bash
-docker compose build
+docker compose build      # compile the portable library + RailCommerceDemo
+docker compose up         # run RailCommerceDemo end-to-end and exit 0
 ```
 
-Produces `railcommerce:latest`, a Linux image containing the Swift toolchain + `RailCommerce` library + `RailCommerceDemo` CLI. **No `docker compose up` / `docker run` is ever required.** The iOS app itself is not built by this step; see the explanation at the top of this README.
+`docker compose build` produces `railcommerce:latest`, a Linux image containing the Swift toolchain, the compiled `RailCommerce` library, and the `RailCommerceDemo` CLI. The iOS app itself is **not** built in this image — Realm's ObjC resource bundle doesn't compile on Linux, and the Swift Package gates that dependency behind `platforms: [.iOS]` so the Linux build stays clean.
+
+`docker compose up` then runs `RailCommerceDemo`, which exercises every service end-to-end (catalog → cart → promotions → checkout → seats → after-sales → messaging → talent → attachments → lifecycle) against a deterministic `FakeClock` + in-memory persistence, prints human-readable output, and exits `0` on success. The container is single-shot (`restart: "no"`); the service terminates once the demo finishes.
+
+**Expected step-by-step output**:
+
+| Step | Expected line(s) | Success signal |
+|---|---|---|
+| 1. Image build | `Building for debugging...` then `Build complete!` | No `error:` lines from `swift build` |
+| 2. Demo start | `━━ Administrator seeds catalog & content ━━` | First section header |
+| 3. Service coverage | A `━━ … ━━` section for each domain (catalog, cart, checkout, seats, after-sales, messaging, talent, attachments, lifecycle) | Every domain prints results |
+| 4. Exit | Container exits with code `0` | `docker compose up` returns control to the shell |
+
+**Expected compose-up exit code:** `0`.
 
 ## Testing
 

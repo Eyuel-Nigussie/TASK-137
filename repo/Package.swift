@@ -29,7 +29,14 @@ let package = Package(
             dependencies: [
                 "RailCommerce",
                 .product(name: "RxSwift", package: "RxSwift"),
-                .product(name: "RealmSwift", package: "realm-swift")
+                // RealmSwift is iOS-only. Its ObjC `RealmCoreResources`
+                // resource-bundle target imports `Foundation/Foundation.h`,
+                // which does not exist on Linux, so pulling it in on Linux
+                // breaks the whole package graph. Gate the dependency so
+                // `swift build` on a Linux container (Dockerfile) can
+                // succeed without ever touching Realm's Objective-C layer.
+                .product(name: "RealmSwift", package: "realm-swift",
+                         condition: .when(platforms: [.iOS]))
             ],
             path: "Sources/RailCommerceApp",
             exclude: ["Info.plist"]
