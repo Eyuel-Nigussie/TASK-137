@@ -93,40 +93,71 @@ echo ">>> Building $SCHEME ($CONFIGURATION)..."
 # provision a team profile.
 #
 # We also pre-resolve SPM packages and strip extended attributes from the
-# working tree + derived data directory. macOS Gatekeeper sometimes stamps
-# files under ~/Documents (and anywhere else it inspects) with xattrs like
-# com.apple.quarantine / com.apple.provenance / com.apple.FinderInfo, which
-# then propagate into SPM framework bundles. `codesign` rejects those with
-# "resource fork, Finder information, or similar detritus not allowed". A
-# single `xattr -cr` pass clears them so ad-hoc signing succeeds.
+# working tree + derived data directory. macOS Gatekeeper / Spotlight /
+# iCloud stamp files under ~/Documents with xattrs (com.apple.quarantine,
+# com.apple.provenance, com.apple.FinderInfo) that propagate into SPM
+# framework bundles. `codesign` rejects them with "resource fork, Finder
+# information, or similar detritus not allowed". On Documents-folder
+# clones these xattrs re-acquire themselves during the build, so we run
+# xcodebuild inside a retry loop that re-strips and re-attempts up to 3
+# times. If it's still failing after that, the root cause is almost
+# certainly the clone location — move the repo out of ~/Documents (e.g.
+# to ~/Developer or ~/Projects) and the problem disappears.
 echo ">>> Pre-resolving SPM packages so xattrs can be stripped before signing..."
 xcodebuild -resolvePackageDependencies \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -derivedDataPath "./build" >/dev/null
-echo ">>> Stripping extended attributes (com.apple.quarantine et al.)..."
-xattr -cr . 2>/dev/null || true
-xattr -cr ./build 2>/dev/null || true
 
-# Clean only the compiled products (./build/Build) — keep the downloaded
-# SPM checkouts in ./build/SourcePackages so we don't re-fetch Realm (~100MB).
-# This guarantees we never reuse a half-built framework left behind by a
-# previous codesign failure (symptom: "no such file" for the Mach-O binary
-# inside an otherwise-valid-looking RealmSwift.framework bundle).
-echo ">>> Removing stale compiled products while preserving SPM checkouts..."
-rm -rf ./build/Build ./build/Intermediates.noindex
+if [[ "$PWD" == "$HOME/Documents/"* ]]; then
+    echo ">>> Warning: this clone lives under ~/Documents."
+    echo "             macOS keeps re-adding xattrs to files here, which"
+    echo "             codesign rejects. If the build still fails after the"
+    echo "             retry loop, move the repo out of ~/Documents (e.g."
+    echo "             to ~/Developer) and re-run this script."
+fi
 
-xcodebuild \
-    -project "$PROJECT" \
-    -scheme "$SCHEME" \
-    -configuration "$CONFIGURATION" \
-    -destination "$DESTINATION" \
-    -derivedDataPath "./build" \
-    CODE_SIGN_IDENTITY="-" \
-    CODE_SIGN_STYLE=Manual \
-    DEVELOPMENT_TEAM="" \
-    PROVISIONING_PROFILE_SPECIFIER="" \
-    build
+strip_xattrs_and_clean_products() {
+    echo ">>> Stripping extended attributes (com.apple.quarantine et al.)..."
+    xattr -cr . 2>/dev/null || true
+    xattr -cr ./build 2>/dev/null || true
+    echo ">>> Removing stale compiled products while preserving SPM checkouts..."
+    rm -rf ./build/Build ./build/Intermediates.noindex
+}
+
+attempt=1
+max_attempts=3
+BUILD_STATUS=1
+while (( attempt <= max_attempts )); do
+    strip_xattrs_and_clean_products
+    echo ">>> Build attempt ${attempt}/${max_attempts}..."
+    if xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -destination "$DESTINATION" \
+            -derivedDataPath "./build" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            build; then
+        BUILD_STATUS=0
+        break
+    fi
+    echo ">>> Build attempt ${attempt} failed — re-stripping xattrs + retrying..."
+    attempt=$((attempt + 1))
+done
+if [[ "$BUILD_STATUS" -ne 0 ]]; then
+    echo
+    echo "Error: xcodebuild failed ${max_attempts} times."
+    if [[ "$PWD" == "$HOME/Documents/"* ]]; then
+        echo "Move this repo out of ~/Documents (e.g. to ~/Developer) and"
+        echo "re-run. macOS re-adds xattrs to files under Documents on every"
+        echo "write, which codesign refuses."
+    fi
+    exit 1
+fi
 
 APP_BUNDLE=$(find "./build/Build/Products" -maxdepth 3 -name "$SCHEME.app" -type d | head -1)
 if [[ -z "${APP_BUNDLE:-}" || ! -d "$APP_BUNDLE" ]]; then
