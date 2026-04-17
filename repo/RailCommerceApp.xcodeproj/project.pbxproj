@@ -19,6 +19,8 @@
 		AA000023 /* SeatInventoryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000022 /* SeatInventoryViewController.swift */; };
 		AA000025 /* TalentMatchingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000024 /* TalentMatchingViewController.swift */; };
 		AA000033 /* RailCommerce in Frameworks */ = {isa = PBXBuildFile; productRef = AA000031 /* RailCommerce */; };
+		AA000034 /* RxSwift in Frameworks */ = {isa = PBXBuildFile; productRef = AA000035 /* RxSwift */; };
+		AA000036 /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = AA000037 /* RealmSwift */; };
 		AA000051 /* AppShellFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000050 /* AppShellFactory.swift */; };
 		AA000053 /* MainSplitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000052 /* MainSplitViewController.swift */; };
 		AA000055 /* MultipeerMessageTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000054 /* MultipeerMessageTransport.swift */; };
@@ -27,7 +29,23 @@
 		AA00005B /* MembershipViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00005A /* MembershipViewController.swift */; };
 		AA00005D /* ContentBrowseViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00005C /* ContentBrowseViewController.swift */; };
 		AA00005F /* AfterSalesCaseThreadViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00005E /* AfterSalesCaseThreadViewController.swift */; };
+		BB000101 /* AppShellFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000001 /* AppShellFactoryTests.swift */; };
+		BB000103 /* SystemProvidersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000003 /* SystemProvidersTests.swift */; };
+		BB000105 /* LoginViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000005 /* LoginViewControllerTests.swift */; };
+		BB000107 /* CartBrowseCheckoutFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000007 /* CartBrowseCheckoutFlowTests.swift */; };
+		BB000109 /* SystemKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000009 /* SystemKeychainTests.swift */; };
+		BB00010B /* RailCommerce in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000B /* RailCommerce */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		BB000201 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA000005;
+			remoteInfo = RailCommerceApp;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		AA000004 /* RailCommerceApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RailCommerceApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -50,6 +68,12 @@
 		AA00005A /* MembershipViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MembershipViewController.swift; sourceTree = "<group>"; };
 		AA00005C /* ContentBrowseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentBrowseViewController.swift; sourceTree = "<group>"; };
 		AA00005E /* AfterSalesCaseThreadViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AfterSalesCaseThreadViewController.swift; sourceTree = "<group>"; };
+		BB000001 /* AppShellFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellFactoryTests.swift; sourceTree = "<group>"; };
+		BB000003 /* SystemProvidersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemProvidersTests.swift; sourceTree = "<group>"; };
+		BB000005 /* LoginViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewControllerTests.swift; sourceTree = "<group>"; };
+		BB000007 /* CartBrowseCheckoutFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartBrowseCheckoutFlowTests.swift; sourceTree = "<group>"; };
+		BB000009 /* SystemKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemKeychainTests.swift; sourceTree = "<group>"; };
+		BB000301 /* RailCommerceAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RailCommerceAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +82,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA000033 /* RailCommerce in Frameworks */,
+				AA000034 /* RxSwift in Frameworks */,
+				AA000036 /* RealmSwift in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB000401 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB00010B /* RailCommerce in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -68,6 +102,7 @@
 			isa = PBXGroup;
 			children = (
 				AA000040 /* Sources */,
+				BB000501 /* Tests */,
 				AA000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -76,6 +111,7 @@
 			isa = PBXGroup;
 			children = (
 				AA000004 /* RailCommerceApp.app */,
+				BB000301 /* RailCommerceAppTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -123,6 +159,27 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		BB000501 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				BB000502 /* RailCommerceAppTests */,
+			);
+			name = Tests;
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		BB000502 /* RailCommerceAppTests */ = {
+			isa = PBXGroup;
+			children = (
+				BB000001 /* AppShellFactoryTests.swift */,
+				BB000007 /* CartBrowseCheckoutFlowTests.swift */,
+				BB000005 /* LoginViewControllerTests.swift */,
+				BB000009 /* SystemKeychainTests.swift */,
+				BB000003 /* SystemProvidersTests.swift */,
+			);
+			path = RailCommerceAppTests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -141,10 +198,32 @@
 			name = RailCommerceApp;
 			packageProductDependencies = (
 				AA000031 /* RailCommerce */,
+				AA000035 /* RxSwift */,
+				AA000037 /* RealmSwift */,
 			);
 			productName = RailCommerceApp;
 			productReference = AA000004 /* RailCommerceApp.app */;
 			productType = "com.apple.product-type.application";
+		};
+		BB000601 /* RailCommerceAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB000701 /* Build configuration list for PBXNativeTarget "RailCommerceAppTests" */;
+			buildPhases = (
+				BB000801 /* Sources */,
+				BB000401 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BB000901 /* PBXTargetDependency */,
+			);
+			name = RailCommerceAppTests;
+			packageProductDependencies = (
+				BB00000B /* RailCommerce */,
+			);
+			productName = RailCommerceAppTests;
+			productReference = BB000301 /* RailCommerceAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -159,6 +238,10 @@
 					AA000005 = {
 						CreatedOnToolsVersion = 16.0;
 					};
+					BB000601 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = AA000005;
+					};
 				};
 			};
 			buildConfigurationList = AA00000B /* Build configuration list for PBXProject "RailCommerceApp" */;
@@ -172,12 +255,15 @@
 			mainGroup = AA000002;
 			packageReferences = (
 				AA000030 /* XCLocalSwiftPackageReference "." */,
+				AA000060 /* XCRemoteSwiftPackageReference "RxSwift" */,
+				AA000061 /* XCRemoteSwiftPackageReference "realm-swift" */,
 			);
 			productRefGroup = AA000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				AA000005 /* RailCommerceApp */,
+				BB000601 /* RailCommerceAppTests */,
 			);
 		};
 /* End PBXProject section */
@@ -219,7 +305,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BB000801 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB000101 /* AppShellFactoryTests.swift in Sources */,
+				BB000107 /* CartBrowseCheckoutFlowTests.swift in Sources */,
+				BB000105 /* LoginViewControllerTests.swift in Sources */,
+				BB000109 /* SystemKeychainTests.swift in Sources */,
+				BB000103 /* SystemProvidersTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BB000901 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA000005 /* RailCommerceApp */;
+			targetProxy = BB000201 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AA000009 /* Debug */ = {
@@ -293,6 +399,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				ENABLE_DEBUG_DYLIB = NO;
 			};
 			name = Debug;
 		};
@@ -321,6 +428,54 @@
 			};
 			name = Release;
 		};
+		BB000A01 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.eaglepoint.railcommerce.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RailCommerceApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RailCommerceApp";
+			};
+			name = Debug;
+		};
+		BB000A02 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.eaglepoint.railcommerce.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RailCommerceApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RailCommerceApp";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -342,6 +497,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		BB000701 /* Build configuration list for PBXNativeTarget "RailCommerceAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB000A01 /* Debug */,
+				BB000A02 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -351,8 +515,42 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		AA000060 /* XCRemoteSwiftPackageReference "RxSwift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ReactiveX/RxSwift.git";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 6.6.0;
+			};
+		};
+		AA000061 /* XCRemoteSwiftPackageReference "realm-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/realm/realm-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.45.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		AA000031 /* RailCommerce */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000030 /* XCLocalSwiftPackageReference "." */;
+			productName = RailCommerce;
+		};
+		AA000035 /* RxSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000060 /* XCRemoteSwiftPackageReference "RxSwift" */;
+			productName = RxSwift;
+		};
+		AA000037 /* RealmSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000061 /* XCRemoteSwiftPackageReference "realm-swift" */;
+			productName = RealmSwift;
+		};
+		BB00000B /* RailCommerce */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = AA000030 /* XCLocalSwiftPackageReference "." */;
 			productName = RailCommerce;

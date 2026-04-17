@@ -75,6 +75,15 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
+        // Under XCTest, skip real app bootstrap — the test bundle creates its
+        // own dependency graph and doesn't want AppDelegate touching production
+        // services (Realm, BGTaskScheduler, notifications). Detected by the
+        // presence of the XCTest injection env var.
+        if ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            return true
+        }
+
         launchBegin = Date()
         requestNotificationAuthorization()
         wireNotificationBus()
